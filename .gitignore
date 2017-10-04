@@ -1,0 +1,12 @@
+tags
+.DS_Store
+local.properties
+gen/
+.idea/
+out/
+*.iml
+build/
+*.apk
+.gradle/
+user.gradle
+local.properties
