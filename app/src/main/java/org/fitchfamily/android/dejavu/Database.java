@@ -177,48 +177,10 @@ public class Database extends SQLiteOpenHelper {
         updatesMade = true;
     }
 
-    public synchronized EmitterInfo getEmitterInfo(RfEmitter emitter) {
-        EmitterInfo rslt = null;
-        String query = "SELECT " + COL_TRUST + ", " +
-                COL_LAT + ", " +
-                COL_LON + ", " +
-                COL_RAD + ", " +
-                COL_NOTE + " " +
-                " FROM " + TABLE_SAMPLES +
-                " WHERE " + COL_TYPE + "='" + emitter.getType() +
-                "' AND " + COL_RFID + "='" + emitter.getId() + "';";
-
-        //Log.d(TAG, "getEmitterInfo(): query='"+query+"'");
-        Cursor cursor = getReadableDatabase().rawQuery(query, null);
-        try {
-            if (cursor.moveToFirst()) {
-                rslt = new EmitterInfo();
-                rslt.trust = (int) cursor.getLong(0);
-                rslt.latitude = (double) cursor.getDouble(1);
-                rslt.longitude = (double) cursor.getDouble(2);
-                rslt.radius = (float) cursor.getDouble(3);
-                rslt.note = cursor.getString(4);
-
-                if (rslt.note == null)
-                    rslt.note = "";
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-        return rslt;
-    }
-
-    public synchronized HashSet<RfEmitter> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
-        HashSet<RfEmitter> rslt = new HashSet<RfEmitter>();
+    public synchronized HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
+        HashSet<RfIdentification> rslt = new HashSet<RfIdentification>();
         String query = "SELECT " +
-                COL_RFID + ", " +
-                COL_TRUST + ", " +
-                COL_LAT + ", " +
-                COL_LON + ", " +
-                COL_RAD + ", " +
-                COL_NOTE + " " +
+                COL_RFID + " " +
                 " FROM " + TABLE_SAMPLES +
                 " WHERE " + COL_TYPE + "='" + rfType +
                 "' AND " + COL_LAT + ">='" + bb.getSouth() +
@@ -231,16 +193,7 @@ public class Database extends SQLiteOpenHelper {
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    RfEmitter e = new RfEmitter(rfType, cursor.getString(0), 0);
-                    EmitterInfo ei = new EmitterInfo();
-                    ei.trust = (int) cursor.getLong(1);
-                    ei.latitude = (double) cursor.getDouble(2);
-                    ei.longitude = (double) cursor.getDouble(3);
-                    ei.radius = (float) cursor.getDouble(4);
-                    ei.note = cursor.getString(5);
-                    if (ei.note == null)
-                        ei.note = "";
-                    e.updateInfo(ei);
+                    RfIdentification e = new RfIdentification(cursor.getString(0), rfType);
                     rslt.add(e);
                 } while (cursor.moveToNext());
             }
@@ -252,7 +205,7 @@ public class Database extends SQLiteOpenHelper {
         return rslt;
     }
 
-    public synchronized RfEmitter getEmitter(String id) {
+    public synchronized RfEmitter getEmitter(RfIdentification ident) {
         RfEmitter rslt = null;
         String query = "SELECT " +
                 COL_TYPE + ", " +
@@ -262,13 +215,14 @@ public class Database extends SQLiteOpenHelper {
                 COL_RAD + ", " +
                 COL_NOTE + " " +
                 " FROM " + TABLE_SAMPLES +
-                " WHERE " + COL_RFID + "='" + id + "';";
+                " WHERE " + COL_TYPE + "='" + ident.getRfType() +
+                "' AND " + COL_RFID + "='" + ident.getRfId() + "';";
 
         // Log.d(TAG, "getEmitter(): query='"+query+"'");
         Cursor cursor = getReadableDatabase().rawQuery(query, null);
         try {
             if (cursor.moveToFirst()) {
-                rslt = new RfEmitter(cursor.getString(0), id, 0);
+                rslt = new RfEmitter(ident, 0);
                 EmitterInfo ei = new EmitterInfo();
                 ei.trust = (int) cursor.getLong(1);
                 ei.latitude = (double) cursor.getDouble(2);
@@ -286,5 +240,4 @@ public class Database extends SQLiteOpenHelper {
         }
         return rslt;
     }
-
 }

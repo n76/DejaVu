@@ -11,6 +11,21 @@ import java.util.Locale;
  * Created by tfitch on 8/27/17.
  */
 
+/**
+ * Models everything we know about an RF emitter: Its identification, most recently received
+ * signal level, an estimate of its coverage (center point and radius), how much we trust
+ * the emitter (can we use information about it to compute a position), etc.
+ *
+ * When an RF emitter is first observed we create a new object and, if information exists in
+ * the database, populate it from saved information.
+ *
+ * Periodically we sync our current information about the emitter back to the flash memory
+ * based storage.
+ *
+ * Trust is incremented everytime we see the emitter and the new observation has data compatible
+ * with our current model. We decrease (or set to zero) our trust if it we think we should have
+ * seen the emitter at our current location or if it looks like the emitter may have moved.
+ */
 public class RfEmitter {
     private final static String TAG = "DejaVu RfEmitter";
 
@@ -30,6 +45,14 @@ public class RfEmitter {
     private static final long MAXIMUM_TRUST = 100;
 
     public enum EmitterType {WLAN, MOBILE}
+
+    public enum EmitterStatus {
+        STATUS_UNKNOWN,             // Newly discovered emitter, no data for it at all
+        STATUS_NEW,                 // Not in database but we've got location data for it
+        STATUS_CHANGED,             // In database but something has changed
+        STATUS_CACHED,              // In database no changes pending
+        STATUS_BLACKLISTED          // Has been blacklisted
+    };
 
     public class Coverage {
         public double latitude;
@@ -75,16 +98,20 @@ public class RfEmitter {
     private Coverage coverage;
     private String note;
 
-    RfEmitter(String typeStr, String ident, int signal) {
-        EmitterType mType;
-        if (typeStr.equals(EmitterType.WLAN.toString()))
-            mType = EmitterType.WLAN;
-        else if (typeStr.equals(EmitterType.MOBILE.toString()))
-            mType = EmitterType.MOBILE;
-        else
-            mType = EmitterType.MOBILE.WLAN;
-        //Log.d(TAG, "RfEmitter('"+typeStr+"', '"+ident+"', "+ signal +") - Type="+mType);
-        initSelf(mType, ident, signal);
+    private int ageSinceLastUse;        // Count of periods since last used (for caching purposes)
+
+    private EmitterStatus status;
+
+    RfEmitter(RfIdentification ident) {
+        initSelf(ident.getRfType(), ident.getRfId(), 0);
+    }
+
+    RfEmitter(RfIdentification ident, int signal) {
+        initSelf(ident.getRfType(), ident.getRfId(), signal);
+    }
+
+    RfEmitter(Observation o) {
+        initSelf(o.getIdent().getRfType(), o.getIdent().getRfId(), o.getAsu());
     }
 
     RfEmitter(EmitterType mType, String ident, int signal) {
@@ -94,16 +121,15 @@ public class RfEmitter {
     private void initSelf(EmitterType mType, String ident, int signal) {
         type = mType;
         id = ident;
-        if (signal > BackendService.MAXIMUM_ASU)
-            asu = BackendService.MAXIMUM_ASU;
-        else if (signal < BackendService.MINIMUM_ASU)
-            asu = BackendService.MINIMUM_ASU;
-        else
-            asu = signal;
+        setAsu(signal);
         coverage = null;
         ourCharacteristics = getRfCharacteristics(mType);
         trust = ourCharacteristics.discoveryTrust;
         note = "";
+        resetAge();
+        status = EmitterStatus.STATUS_UNKNOWN;
+        if (blacklistEmitter())
+            changeStatus(EmitterStatus.STATUS_BLACKLISTED, "initSelf()");
     }
 
     @Override
@@ -135,6 +161,10 @@ public class RfEmitter {
         return id;
     }
 
+    public RfIdentification getRfIdent() {
+        return new RfIdentification(id, type);
+    }
+
     public long getTrust() {
         return trust;
     }
@@ -157,12 +187,84 @@ public class RfEmitter {
         return 0.0;
     }
 
+    public void setAsu(int signal) {
+        if (signal > BackendService.MAXIMUM_ASU)
+            asu = BackendService.MAXIMUM_ASU;
+        else if (signal < BackendService.MINIMUM_ASU)
+            asu = BackendService.MINIMUM_ASU;
+        else
+            asu = signal;
+    }
+
     public void setNote(String n) {
-        note = n;
+        if (note != n) {
+            note = n;
+            // TODO: If note changes to one that is blacklisted we should blacklist it.
+        }
     }
 
     public String getNote() {
         return note;
+    }
+
+    public int getAge() {
+        return ageSinceLastUse;
+    }
+
+    public void resetAge() {
+        ageSinceLastUse = 0;
+    }
+
+    public void incrementAge() {
+        ageSinceLastUse++;
+    }
+
+    public boolean syncNeeded() {
+        return (status == EmitterStatus.STATUS_NEW) ||
+                (status == EmitterStatus.STATUS_CHANGED) ||
+                ((status == EmitterStatus.STATUS_BLACKLISTED) &&
+                        (coverage != null));
+    }
+
+    public void sync(Database db) {
+        EmitterStatus newStatus = status;
+
+        switch (status) {
+            case STATUS_UNKNOWN:
+                // Not in database, we have no location. Nothing to sync.
+                break;
+
+            case STATUS_BLACKLISTED:
+                // If our coverage value is not null it implies that we exist in the
+                // database. If so we ought to remove the entry.
+                if (coverage != null) {
+                    db.drop(this);
+                    coverage = null;
+                }
+                break;
+
+            case STATUS_NEW:
+                // Not in database, we have location. Add to database
+                db.insert(this);
+                newStatus = EmitterStatus.STATUS_CACHED;
+                break;
+
+            case STATUS_CHANGED:
+                // In database but we have changes
+                if (trust < 0) {
+                    Log.d(TAG, "sync('" + logString() + "') - Trust below zero, dropping from database.");
+                    db.drop(this);
+                } else
+                    db.update(this);
+                newStatus = EmitterStatus.STATUS_CACHED;
+                break;
+
+            case STATUS_CACHED:
+                // In database but we don't have any changes
+                break;
+        }
+        changeStatus(newStatus, "sync('"+logString()+"')");
+
     }
 
     public String logString() {
@@ -210,27 +312,26 @@ public class RfEmitter {
         );
     }
 
-    public void incrementTrust(Database db) {
+    public void incrementTrust() {
         //Log.d(TAG, "incrementTrust('"+id+"') - entry.");
-        long newTrust = trust + ourCharacteristics.incrTrust;
-        if (newTrust > MAXIMUM_TRUST)
-            newTrust = MAXIMUM_TRUST;
-        if (newTrust != trust) {
-            Log.d(TAG, "incrementTrust('"+logString()+"') - trust change: "+trust +"->" + newTrust);
-            trust = newTrust;
-            db.update(this);
+        if (canUpdate()) {
+            long newTrust = trust + ourCharacteristics.incrTrust;
+            if (newTrust > MAXIMUM_TRUST)
+                newTrust = MAXIMUM_TRUST;
+            if (newTrust != trust) {
+                // Log.d(TAG, "incrementTrust('" + logString() + "') - trust change: " + trust + "->" + newTrust);
+                trust = newTrust;
+                changeStatus(EmitterStatus.STATUS_CHANGED, "incrementTrust('"+logString()+"')");
+            }
         }
     }
 
-    public void decrementTrust(Database db) {
-        long oldTrust = trust;
-        trust -= ourCharacteristics.decrTrust;
-        if (trust < 0) {
-            Log.d(TAG, "decrementTrust('"+logString()+"') - Trust below zero, dropping from database.");
-            db.drop(this);
-        } else if (oldTrust != trust){
-            Log.d(TAG, "decrementTrust('"+logString()+"') - trust change: "+oldTrust +"->" + trust);
-            db.update(this);
+    public void decrementTrust() {
+        if (canUpdate()) {
+            long oldTrust = trust;
+            trust -= ourCharacteristics.decrTrust;
+            // Log.d(TAG, "decrementTrust('" + logString() + "') - trust change: " + oldTrust + "->" + trust);
+            changeStatus(EmitterStatus.STATUS_CHANGED, "decrementTrust('"+logString()+"')");
         }
     }
 
@@ -244,69 +345,49 @@ public class RfEmitter {
             coverage.radius = emitterInfo.radius;
             trust = emitterInfo.trust;
             note = emitterInfo.note;
+            changeStatus(EmitterStatus.STATUS_CACHED, "updateInfo('"+logString()+"')");
         }
     }
 
-    public void updateLocation(Database db, Location gpsLoc) {
-        Database.EmitterInfo emitterInfo = db.getEmitterInfo(this);
+    public void updateLocation(Location gpsLoc) {
 
-        if (blacklistEmitter()) {
-            Log.d(TAG,"updateLocation() - emitter '"+this.note+"' blacklisted");
-            if (emitterInfo != null)
-                db.drop(this);
+        if (status == EmitterStatus.STATUS_BLACKLISTED)
             return;
-        }
-
-        if (emitterInfo == null) {
-            if ((gpsLoc != null) && (gpsLoc.getAccuracy() <= ourCharacteristics.reqdGpsAccuracy)) {
-                Log.d(TAG, "updateLocation("+id+") - adding to database");
-                if (coverage == null)
-                    coverage = new Coverage();
-                coverage.latitude = gpsLoc.getLatitude();
-                coverage.longitude = gpsLoc.getLongitude();
-                coverage.radius = 0.0f;
-                db.insert(this);
-            } else {
-                String gpsAcc = "unknown";
-                if (gpsLoc != null)
-                    gpsAcc = String.valueOf(gpsLoc.getAccuracy());
-                Log.d(TAG, "updateLocation("+id+") Unknown emitter, GPS not accurate (" + gpsAcc + ")");
-            }
-            return;
-        }
-
-//        Log.d(TAG, "updateLocation("+id+") - emitter in database");
-        if (coverage == null)
-            coverage = new Coverage();
-        coverage.latitude = emitterInfo.latitude;
-        coverage.longitude = emitterInfo.longitude;
-        coverage.radius = emitterInfo.radius;
-        trust = emitterInfo.trust;
 
         if ((gpsLoc == null) || (gpsLoc.getAccuracy() > ourCharacteristics.reqdGpsAccuracy)) {
-            String gpsAcc = "unknown";
-            if (gpsLoc != null)
-                gpsAcc = String.valueOf(gpsLoc.getAccuracy());
+            //String gpsAcc = "unknown";
+            //if (gpsLoc != null)
+            //    gpsAcc = String.valueOf(gpsLoc.getAccuracy());
             //Log.d(TAG, "updateLocation("+id+") GPS not accurate enough to update coverage (" + gpsAcc + " > " + ourCharacteristics.reqdGpsAccuracy + ")");
+            return;
+        }
+
+        if (coverage == null) {
+            Log.d(TAG, "updateLocation("+id+") emitter is new.");
+            coverage = new Coverage();
+            coverage.latitude = gpsLoc.getLatitude();
+            coverage.longitude = gpsLoc.getLongitude();
+            coverage.radius = 0.0f;
+            changeStatus(EmitterStatus.STATUS_NEW, "updateLocation('"+logString()+"')");
             return;
         }
 
         // If the emitter has moved, reset our data on it.
         float sampleDistance = gpsLoc.distanceTo(_getLocation());
         if (sampleDistance >= ourCharacteristics.moveDetectDistance) {
-            Log.d(TAG, "updateLocation("+id+") transmitter has moved (" + gpsLoc.distanceTo(_getLocation()) + ")");
+            Log.d(TAG, "updateLocation("+id+") emitter has moved (" + gpsLoc.distanceTo(_getLocation()) + ")");
             coverage.latitude = gpsLoc.getLatitude();
             coverage.longitude = gpsLoc.getLongitude();
             coverage.radius = 0.0f;
             trust = ourCharacteristics.discoveryTrust;
-            db.update(this);
+            changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
             return;
         }
 
         //
-        // See if the bounding box has increased. If anything changes, then update the database.
+        // See if the bounding box has increased.
+
         boolean changed = false;
-        String changeReason = "";
         if (sampleDistance > coverage.radius) {
             double north = coverage.latitude + (coverage.radius * METER_TO_DEG);
             double south = coverage.latitude - (coverage.radius * METER_TO_DEG);
@@ -317,40 +398,31 @@ public class RfEmitter {
             if (gpsLoc.getLatitude() > north) {
                 north = gpsLoc.getLatitude();
                 changed = true;
-                changeReason = changeReason + "(north)";
             }
             if (gpsLoc.getLatitude() < south) {
                 south = gpsLoc.getLatitude();
                 changed = true;
-                changeReason = changeReason + "(south)";
             }
             if (gpsLoc.getLongitude() > east) {
                 east = gpsLoc.getLongitude();
                 changed = true;
-                changeReason = changeReason + "(east)";
             }
             if (gpsLoc.getLongitude() < west) {
                 west = gpsLoc.getLongitude();
-                changeReason = changeReason + "(west)";
                 changed = true;
             }
-            coverage.latitude = (north + south)/2.0;
-            coverage.longitude = (east + west)/2.0;
-            coverage.radius = (float)((north - coverage.latitude) * DEG_TO_METER);
-            cosLat = Math.cos(Math.toRadians(coverage.latitude));
-            if (cosLat != 0.0) {
-                float ewRadius = (float) (((east - coverage.longitude) * DEG_TO_METER) / cosLat);
-                if (ewRadius > coverage.radius)
-                    coverage.radius = ewRadius;
+            if (changed) {
+                changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
+                coverage.latitude = (north + south)/2.0;
+                coverage.longitude = (east + west)/2.0;
+                coverage.radius = (float)((north - coverage.latitude) * DEG_TO_METER);
+                cosLat = Math.cos(Math.toRadians(coverage.latitude));
+                if (cosLat != 0.0) {
+                    float ewRadius = (float) (((east - coverage.longitude) * DEG_TO_METER) / cosLat);
+                    if (ewRadius > coverage.radius)
+                        coverage.radius = ewRadius;
+                }
             }
-        }
-        if (emitterInfo.note.compareTo(this.note) != 0) {
-            changed = true;
-            changeReason = changeReason + "(note: "+emitterInfo.note+"->"+this.note+")";
-        }
-        if (changed) {
-            Log.d(TAG, "updateLocation("+id+") - emitter updated " + changeReason);
-            db.update(this);
         }
     }
 
@@ -359,7 +431,7 @@ public class RfEmitter {
     // with radius values that fit within a bounding box but we report a radius that
     // extends to the corners of the bounding box.
     public  Location getLocation() {
-        if (trust < REQUIRED_TRUST)
+        if ((trust < REQUIRED_TRUST) || (status == EmitterStatus.STATUS_BLACKLISTED))
             return null;
         Location boundaryBoxSized = _getLocation();
         if (boundaryBoxSized == null)
@@ -499,5 +571,60 @@ public class RfEmitter {
 
                 // lc.endsWith("_nomap")                    // Google unsubscibe option
         );
+    }
+
+    private boolean canUpdate() {
+        boolean rslt = true;
+        switch (status) {
+            case STATUS_BLACKLISTED:
+            case STATUS_UNKNOWN:
+                rslt = false;
+                break;
+        }
+        return rslt;
+    }
+
+    private void changeStatus( EmitterStatus newStatus, String info) {
+        if (newStatus == status)
+            return;
+
+        EmitterStatus finalStatus = status;
+        switch (finalStatus) {
+            case STATUS_BLACKLISTED:
+                // Once blacklisted cannot change.
+                break;
+
+            case STATUS_CACHED:
+            case STATUS_CHANGED:
+                switch (newStatus) {
+                    case STATUS_BLACKLISTED:
+                    case STATUS_CACHED:
+                    case STATUS_CHANGED:
+                        finalStatus = newStatus;
+                        break;
+                }
+                break;
+
+            case STATUS_NEW:
+                switch (newStatus) {
+                    case STATUS_BLACKLISTED:
+                    case STATUS_CACHED:
+                        finalStatus = newStatus;
+                        break;
+                }
+                break;
+
+            case STATUS_UNKNOWN:
+                switch (newStatus) {
+                    case STATUS_BLACKLISTED:
+                    case STATUS_CACHED:
+                    case STATUS_NEW:
+                        finalStatus = newStatus;
+                }
+                break;
+        }
+
+        //Log.d(TAG,"changeStatus("+newStatus+", "+ info + ") " + status + " -> " + finalStatus);
+        status = finalStatus;
     }
 }
