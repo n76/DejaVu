@@ -48,13 +48,15 @@ public class Cache {
     }
 
     /**
-     * Queries the cache with the given RfIdentification
-     * @param id
-     * @return the emitter
+     * Queries the cache with the given RfIdentification.
      *
      * If the emitter does not exist in the cache, it is
      * added (from the database if known or a new "unknown"
      * entry is created).
+     *
+     * @param id
+     * @return the emitter
+     *
      */
     public synchronized RfEmitter get(RfIdentification id, Database db) {
         if ((id == null) || (db == null))
@@ -73,17 +75,21 @@ public class Cache {
         return rslt;
     }
 
-    public synchronized Cache clear() {
+    /**
+     * Remove all entries from the cache.
+     */
+    public synchronized void clear() {
         workingSet.clear();
         Log.d(TAG,"clear() - entry");
-        return this;
     }
 
     /**
-     * Updates the database entry for any new or changed emitters
-     * @param db The database we are using
+     * Updates the database entry for any new or changed emitters.
+     * Once the database has been synchronized, cull infrequently used
+     * entries. If our cache is still to big after culling, we reset
+     * our cache.
      *
-     * Once the database has been synchronized, we reset our cache.
+     * @param db The database we are using
      */
     public synchronized void sync(Database db) {
         boolean doSync = false;
