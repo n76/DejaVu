@@ -114,11 +114,23 @@ public class BackendService extends LocationBackendService {
     Set<RfIdentification> expectedSet;
     Cache emitterCache = new Cache();
 
-    long collectionPeriod;
-    boolean wifiSeen;
-    boolean mobileSeen;
-    private final static long COLLECTION_INTERVAL = 4000;        // in milliseconds
+    //
+    // Scanning and reporting are resource intensive operations, so we throttle
+    // them. Ideally the intervals should be multiples of one another.
+    //
+    // We are triggered by external events, so we really don't run periodically.
+    // So these numbers are the minimum time. Actual will be at least that based
+    // on when we get GPS locations and/or update requests from microG/UnifiedNlp.
+    //
+    private final static long WLAN_SCAN_INTERVAL = 2000;        // in milliseconds
+    private final static long MOBILE_SCAN_INTERVAL = 4000;      // in milliseconds
+    private final static long REPORTING_INTERVAL = 4000;        // in milliseconds
+
     private long lastMobileScanPeriod;
+    private long lastWlanScanPeriod;
+    private long reportPeriod;
+    private boolean wifiSeen;
+    private boolean mobileSeen;
 
 
     //
@@ -159,8 +171,9 @@ public class BackendService extends LocationBackendService {
         Log.d(TAG, "onOpen() entry.");
         super.onOpen();
         instance = this;
-        collectionPeriod = currentProcessPeriodId(System.currentTimeMillis());
-        lastMobileScanPeriod = collectionPeriod - 1;
+        reportPeriod = System.currentTimeMillis() / REPORTING_INTERVAL;
+        lastMobileScanPeriod = (System.currentTimeMillis() / MOBILE_SCAN_INTERVAL) - 1;
+        lastWlanScanPeriod = (System.currentTimeMillis() / WLAN_SCAN_INTERVAL) - 1;
         wifiSeen = false;
         mobileSeen = false;
 
@@ -264,7 +277,7 @@ public class BackendService extends LocationBackendService {
      * @param updt The current GPS reported location
      */
     private synchronized void onGpsChanged(Location updt) {
-        // Log.d(TAG, "onGpsChanged() entry.");
+        //Log.d(TAG, "onGpsChanged() entry.");
         if (gpsLocation == null)
             gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
         else
@@ -290,6 +303,16 @@ public class BackendService extends LocationBackendService {
      * method will be called by Android.
      */
     private void startWiFiScan() {
+        // Throttle scanning for mobile towers. Generally each tower covers a significant amount
+        // of terrain so even if we are moving fairly rapidly we should remain in a single tower's
+        // coverage area for several seconds. No need to sample more ofen than that and we save
+        // resources on the phone.
+        long currentProcessPeriod = System.currentTimeMillis() / WLAN_SCAN_INTERVAL;
+        if (lastWlanScanPeriod == currentProcessPeriod)
+            return;
+        lastWlanScanPeriod = currentProcessPeriod;
+
+        // Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
         if (wm == null) {
             wm = (WifiManager) this.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         }
@@ -308,7 +331,7 @@ public class BackendService extends LocationBackendService {
         // of terrain so even if we are moving fairly rapidly we should remain in a single tower's
         // coverage area for several seconds. No need to sample more ofen than that and we save
         // resources on the phone.
-        long currentProcessPeriod = currentProcessPeriodId(System.currentTimeMillis());
+        long currentProcessPeriod = System.currentTimeMillis() / MOBILE_SCAN_INTERVAL;
         if (lastMobileScanPeriod == currentProcessPeriod)
             return;
         lastMobileScanPeriod = currentProcessPeriod;
@@ -564,7 +587,7 @@ public class BackendService extends LocationBackendService {
      *
      * @param myWork
      */
-    private void backgroundProcessing(WorkItem myWork) {
+    private synchronized void backgroundProcessing(WorkItem myWork) {
         if (seenSet == null)
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
@@ -876,10 +899,6 @@ public class BackendService extends LocationBackendService {
         return true;
     }
 
-    private long currentProcessPeriodId(long timeMs) {
-        return timeMs / COLLECTION_INTERVAL;
-    }
-
     /**
      * We bulk up operations to reduce writing to flash memory. And there really isn't
      * much need to report location to microG/UnifiedNlp more often than once every three
@@ -897,12 +916,12 @@ public class BackendService extends LocationBackendService {
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-        long thisProcessPeriod = currentProcessPeriodId(timeMs);
+        long thisProcessPeriod = timeMs / REPORTING_INTERVAL;;
 
         // End of process period. Adjust the trust values of all
         // the emitters we've seen and the ones we expected
         // to see but did not.
-        if (thisProcessPeriod != collectionPeriod) {
+        if (thisProcessPeriod != reportPeriod) {
             //Log.d(TAG,"endOfPeriodProcessing() - Starting new process period.");
 
             //
@@ -937,7 +956,7 @@ public class BackendService extends LocationBackendService {
                 report(weightedAverageLocation);
 
             kalmanLocationEstimate.setSamples(0);
-            collectionPeriod = thisProcessPeriod;
+            reportPeriod = thisProcessPeriod;
             seenSet = new HashSet<RfIdentification>();
             expectedSet = new HashSet<RfIdentification >();
             wifiSeen = false;
