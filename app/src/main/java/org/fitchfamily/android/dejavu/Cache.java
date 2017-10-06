@@ -4,6 +4,8 @@ package org.fitchfamily.android.dejavu;
  * Created by tfitch on 10/4/17.
  */
 
+import android.content.Context;
+import android.provider.ContactsContract;
 import android.util.Log;
 
 import java.util.HashSet;
@@ -28,6 +30,10 @@ import java.util.Set;
  * too large we will clear it to conservery RAM (this should never happen). Again the
  * clear operation will only occur after a sync() so any dirty records will be flushed
  * to the database.
+ *
+ * Operations on the cache are thread safe. However the underlying RF emitter objects
+ * that are returned by the cache are not thread safe. So all work on them should be
+ * performed either in a single thread or with synchronization.
  */
 public class Cache {
     private static final int MAX_WORKING_SET_SIZE = 200;
@@ -36,15 +42,27 @@ public class Cache {
     private static final String TAG="DejaVu Cache";
 
     /**
-     * DB positive query cache (found in the db).
+     * Map (since they all must have different identifications) of
+     * all the emitters we are working with.
      */
     private final Map<String,RfEmitter> workingSet = new HashMap<String,RfEmitter>();
+    private Database db;
 
-    public RfEmitter get(String id, RfEmitter.EmitterType t, Database db) {
-        if ((id == null) || (db == null))
-            return null;
-        RfIdentification ident = new RfIdentification(id,t);
-        return get(ident, db);
+    Cache(Context context) {
+        db = new Database(context);
+    }
+
+    /**
+     * Release all resources associated with the cache. If the cache is
+     * dirty, then it is sync'd to the on flash database.
+     */
+    public void close() {
+        synchronized (this) {
+            this.sync();
+            this.clear();
+            db.close();
+            db = null;
+        }
     }
 
     /**
@@ -58,29 +76,33 @@ public class Cache {
      * @return the emitter
      *
      */
-    public synchronized RfEmitter get(RfIdentification id, Database db) {
-        if ((id == null) || (db == null))
+    public RfEmitter get(RfIdentification id) {
+        if (id == null)
             return null;
 
-        String key = id.toString();
-        RfEmitter rslt = workingSet.get(key);
-        if (rslt == null) {
-            rslt = db.getEmitter(id);
-            if (rslt == null)
-                rslt = new RfEmitter(id);
-            workingSet.put(key,rslt);
-            //Log.d(TAG,"get('"+key+"') - Added to cache.");
+        synchronized (this) {
+            String key = id.toString();
+            RfEmitter rslt = workingSet.get(key);
+            if (rslt == null) {
+                rslt = db.getEmitter(id);
+                if (rslt == null)
+                    rslt = new RfEmitter(id);
+                workingSet.put(key, rslt);
+                //Log.d(TAG,"get('"+key+"') - Added to cache.");
+            }
+            rslt.resetAge();
+            return rslt;
         }
-        rslt.resetAge();
-        return rslt;
     }
 
     /**
      * Remove all entries from the cache.
      */
-    public synchronized void clear() {
-        workingSet.clear();
-        Log.d(TAG,"clear() - entry");
+    public void clear() {
+        synchronized (this) {
+            workingSet.clear();
+            Log.d(TAG, "clear() - entry");
+        }
     }
 
     /**
@@ -88,45 +110,50 @@ public class Cache {
      * Once the database has been synchronized, cull infrequently used
      * entries. If our cache is still to big after culling, we reset
      * our cache.
-     *
-     * @param db The database we are using
      */
-    public synchronized void sync(Database db) {
-        boolean doSync = false;
+    public void sync() {
+        synchronized (this) {
+            boolean doSync = false;
 
-        // Scan all of our emitters to see
-        // 1. If any have dirty data to sync to the flash database
-        // 2. If any have been unused long enough to remove from cache
+            // Scan all of our emitters to see
+            // 1. If any have dirty data to sync to the flash database
+            // 2. If any have been unused long enough to remove from cache
 
-        Set<RfIdentification> agedSet = new HashSet<RfIdentification>();
-        for (Map.Entry<String,RfEmitter> e : workingSet.entrySet()) {
-            RfEmitter rfE = e.getValue();
-            doSync |= rfE.syncNeeded();
-
-            //Log.d(TAG,"sync('"+rfE.getRfIdent()+"') - Age: " + rfE.getAge());
-            if (rfE.getAge() >= MAX_AGE)
-                agedSet.add(rfE.getRfIdent());
-            rfE.incrementAge();
-        }
-
-        // Remove aged out items from cache
-        for (RfIdentification id : agedSet) {
-            String key = id.toString();
-            //Log.d(TAG,"sync('"+key+"') - Aged out, removed from cache.");
-            workingSet.remove(key);
-        }
-
-        if (doSync) {
-            db.beginTransaction();
+            Set<RfIdentification> agedSet = new HashSet<RfIdentification>();
             for (Map.Entry<String, RfEmitter> e : workingSet.entrySet()) {
-                e.getValue().sync(db);
+                RfEmitter rfE = e.getValue();
+                doSync |= rfE.syncNeeded();
+
+                //Log.d(TAG,"sync('"+rfE.getRfIdent()+"') - Age: " + rfE.getAge());
+                if (rfE.getAge() >= MAX_AGE)
+                    agedSet.add(rfE.getRfIdent());
+                rfE.incrementAge();
             }
-            db.endTransaction();
-        }
-        if (workingSet.size() > MAX_WORKING_SET_SIZE) {
-            Log.d(TAG, "sync() - Clearing working set.");
-            workingSet.clear();
+
+            // Remove aged out items from cache
+            for (RfIdentification id : agedSet) {
+                String key = id.toString();
+                //Log.d(TAG,"sync('"+key+"') - Aged out, removed from cache.");
+                workingSet.remove(key);
+            }
+
+            if (doSync) {
+                db.beginTransaction();
+                for (Map.Entry<String, RfEmitter> e : workingSet.entrySet()) {
+                    e.getValue().sync(db);
+                }
+                db.endTransaction();
+            }
+            if (workingSet.size() > MAX_WORKING_SET_SIZE) {
+                Log.d(TAG, "sync() - Clearing working set.");
+                workingSet.clear();
+            }
         }
     }
 
+    public HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
+        synchronized (this) {
+            return db.getEmitters(rfType, bb);
+        }
+    }
 }

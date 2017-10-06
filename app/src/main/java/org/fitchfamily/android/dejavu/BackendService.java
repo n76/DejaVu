@@ -80,7 +80,6 @@ public class BackendService extends LocationBackendService {
     private Thread mobileThread;
     private Thread backgroundThread;
 
-    private Database database;
     private TelephonyManager tm;
 
     // Stuff for scanning WiFi APs
@@ -112,7 +111,7 @@ public class BackendService extends LocationBackendService {
     //
     Set<RfIdentification> seenSet;
     Set<RfIdentification> expectedSet;
-    Cache emitterCache = new Cache();
+    Cache emitterCache;
 
     //
     // Scanning and reporting are resource intensive operations, so we throttle
@@ -177,8 +176,9 @@ public class BackendService extends LocationBackendService {
         wifiSeen = false;
         mobileSeen = false;
 
-        if (database == null)
-            database = new Database(this);
+        if (emitterCache == null)
+            emitterCache = new Cache(this);
+
         setgpsMonitorRunning(true);
         this.registerReceiver(wifiBroadcastReceiver, wifiBroadcastFilter);
     }
@@ -192,13 +192,14 @@ public class BackendService extends LocationBackendService {
         Log.d(TAG, "onClose()");
         this.unregisterReceiver(wifiBroadcastReceiver);
         setgpsMonitorRunning(false);
-        emitterCache.clear();
+
+        if (emitterCache != null) {
+            emitterCache.close();
+            emitterCache = null;
+        }
+
         if (instance == this) {
             instance = null;
-        }
-        if (database != null) {
-            database.close();
-            database = null;
         }
     }
 
@@ -276,26 +277,31 @@ public class BackendService extends LocationBackendService {
      *
      * @param updt The current GPS reported location
      */
-    private synchronized void onGpsChanged(Location updt) {
-        //Log.d(TAG, "onGpsChanged() entry.");
-        if (gpsLocation == null)
-            gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
-        else
-            gpsLocation.update(updt);
-        scanAllSensors();
+    private void onGpsChanged(Location updt) {
+        synchronized (this) {
+            //Log.d(TAG, "onGpsChanged() entry.");
+            if (gpsLocation == null)
+                gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
+            else
+                gpsLocation.update(updt);
+
+            scanAllSensors();
+        }
     }
 
     /**
      * Kick off new scans for all the sensor types we know about. Typically scans
      * should occur asynchronously so we don't hang up our caller's thread.
      */
-    private synchronized void scanAllSensors() {
-        if (database == null) {
-            Log.d(TAG,"scanAllSensors() - Database is null?!?");
-            return;
+    private void scanAllSensors() {
+        synchronized (this) {
+            if (emitterCache == null) {
+                Log.d(TAG, "scanAllSensors() - emitterCache is null?!?");
+                return;
+            }
+            startWiFiScan();
+            startMobileScan();
         }
-        startWiFiScan();
-        startMobileScan();
     }
 
     /**
@@ -361,7 +367,7 @@ public class BackendService extends LocationBackendService {
         Collection<Observation> observations = getMobileTowers();
 
         if (observations.size() > 0) {
-            queueForProcessing(observations, RfEmitter.EmitterType.MOBILE);
+            queueForProcessing(observations, RfEmitter.EmitterType.MOBILE, System.currentTimeMillis());
         }
     }
 
@@ -519,7 +525,7 @@ public class BackendService extends LocationBackendService {
      * the area.
      */
     private void onWiFisChanged() {
-        if ((wm != null) && (database != null)) {
+        if ((wm != null) && (emitterCache != null)) {
             List<ScanResult> scanResults = wm.getScanResults();
             Set<Observation> observations = new HashSet<Observation>();
             for (ScanResult sr : scanResults) {
@@ -533,7 +539,7 @@ public class BackendService extends LocationBackendService {
                 }
             }
             if (!observations.isEmpty()) {
-                queueForProcessing(observations, RfEmitter.EmitterType.WLAN);
+                queueForProcessing(observations, RfEmitter.EmitterType.WLAN, System.currentTimeMillis());
             }
         }
     }
@@ -546,11 +552,12 @@ public class BackendService extends LocationBackendService {
      * @param rft The type of emitter for the observations.
      */
     private synchronized void queueForProcessing(Collection<Observation> observations,
-                                                 RfEmitter.EmitterType rft) {
+                                                 RfEmitter.EmitterType rft,
+                                                 long timeMs) {
         Location loc = null;
         if (gpsLocation != null)
             loc = gpsLocation.getLocation();
-        WorkItem work = new WorkItem(observations, rft, loc, System.currentTimeMillis());
+        WorkItem work = new WorkItem(observations, rft, loc, timeMs);
         workQueue.offer(work);
 
         if (backgroundThread != null) {
@@ -592,7 +599,7 @@ public class BackendService extends LocationBackendService {
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-        if (database == null)
+        if (emitterCache == null)
             return;
 
 
@@ -603,7 +610,7 @@ public class BackendService extends LocationBackendService {
         // observation set.
         for (Observation o : myWork.observations) {
             seenSet.add(o.getIdent());
-            RfEmitter e = emitterCache.get(o.getIdent(),database);
+            RfEmitter e = emitterCache.get(o.getIdent());
             if (e != null) {
                 e.setAsu(o.getAsu());
                 e.setNote(o.getNote());
@@ -647,9 +654,9 @@ public class BackendService extends LocationBackendService {
      */
     private synchronized List<Location> updateEmitters(Collection<RfEmitter> emitters, Location gps, long curTime) {
         List<Location> locations = new LinkedList<>();
-        if (database == null) {
-            Log.d(TAG,"updateEmitters() - Database is null?!?");
-            database = new Database(this);
+        if (emitterCache == null) {
+            Log.d(TAG,"updateEmitters() - emitterCache is null?!?");
+            emitterCache = new Cache(this);
         }
 
         for (RfEmitter emitter : emitters) {
@@ -908,8 +915,8 @@ public class BackendService extends LocationBackendService {
      * @param timeMs The time associated with the current set of observations
      */
     private void endOfPeriodProcessing(long timeMs) {
-        if (database == null) {
-            Log.d(TAG,"endOfPeriodProcessing() - Database is null?!?");
+        if (emitterCache == null) {
+            Log.d(TAG,"endOfPeriodProcessing() - emitterCache is null?!?");
             return;
         }
         if (seenSet == null)
@@ -929,14 +936,14 @@ public class BackendService extends LocationBackendService {
             // of the emitters we expected to see but didn't.
 
             for (RfIdentification id : seenSet) {
-                RfEmitter e = emitterCache.get(id, database);
+                RfEmitter e = emitterCache.get(id);
                 if (e != null)
                     e.incrementTrust();
             }
 
             for (RfIdentification  u : expectedSet) {
                 if (!seenSet.contains(u)) {
-                    RfEmitter e = emitterCache.get(u, database);
+                    RfEmitter e = emitterCache.get(u);
                     if (e != null) {
                         e.decrementTrust();
                     }
@@ -944,16 +951,19 @@ public class BackendService extends LocationBackendService {
             }
 
             // Sync all of our changes to the on flash database.
-            emitterCache.sync(database);
+            emitterCache.sync();
 
 
             // Report location to UnifiedNlp at end of each processing period. If we've seen
             // any WiFi APs then the kalman filtered location is probably better. If we've only
             // seen cell towers then a weighted average is probably better.
-            if (wifiSeen && (kalmanLocationEstimate != null))
+            if (wifiSeen && (kalmanLocationEstimate != null)) {
+                //Log.d(TAG,"endOfPeriodProcessing() - reporting Kalman position.");
                 report(kalmanLocationEstimate.getLocation());
-            else if (mobileSeen && (weightedAverageLocation != null))
+            } else if (mobileSeen && (weightedAverageLocation != null)) {
+                //Log.d(TAG,"endOfPeriodProcessing() - reporting weighed average position.");
                 report(weightedAverageLocation);
+            }
 
             kalmanLocationEstimate.setSamples(0);
             reportPeriod = thisProcessPeriod;
@@ -975,11 +985,11 @@ public class BackendService extends LocationBackendService {
      *               box.
      */
     private void updateExpected(BoundingBox bb, RfEmitter.EmitterType rfType) {
-        if (database == null)
+        if (emitterCache == null)
             return;
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-        expectedSet.addAll(database.getEmitters(rfType, bb));
+        expectedSet.addAll(emitterCache.getEmitters(rfType, bb));
     }
 }
 

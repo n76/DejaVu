@@ -13,9 +13,12 @@ import java.util.HashSet;
  * Created by tfitch on 9/1/17.
  */
 
+/**
+ * Interface to our on flash SQL database. Note that these methods are not
+ * thread safe. However all access to the database is through the Cache object
+ * which is thread safe.
+ */
 public class Database extends SQLiteOpenHelper {
-
-
     private static final String TAG = "DejaVu DB";
 
     private static final int VERSION = 1;
@@ -81,7 +84,15 @@ public class Database extends SQLiteOpenHelper {
         super.onOpen(db);
     }
 
-    public synchronized void beginTransaction() {
+    /**
+     * Start an update operation.
+     *
+     * We make sure we are not already in a transaction, make sure
+     * our database is writeable, compile the insert, update and drop
+     * statements that are likely to be used, etc. Then we actually
+     * start the transaction on the underlying SQL database.
+     */
+    public void beginTransaction() {
         //Log.d(TAG,"beginTransaction()");
         if (withinTransaction) {
             Log.d(TAG,"beginTransaction() - Already in a transaction?");
@@ -118,7 +129,12 @@ public class Database extends SQLiteOpenHelper {
         database.beginTransaction();
     }
 
-    public synchronized void endTransaction() {
+    /**
+     * End a transaction. If we actually made any changes then we mark
+     * the transaction as successful. Once marked as successful we
+     * end the transaction with the underlying SQL database.
+     */
+    public void endTransaction() {
         //Log.d(TAG,"endTransaction()");
         if (!withinTransaction) {
             Log.d(TAG,"Asked to end transaction but we are not in one???");
@@ -133,7 +149,12 @@ public class Database extends SQLiteOpenHelper {
         withinTransaction = false;
     }
 
-    public synchronized void drop(RfEmitter emitter) {
+    /**
+     * Drop an RF emitter from the database.
+     *
+     * @param emitter The emitter to be dropped.
+     */
+    public void drop(RfEmitter emitter) {
         //Log.d(TAG, "Dropping " + emitter.logString() + " from db");
 
         sqlAPdrop.bindString(1, emitter.getId());
@@ -143,24 +164,32 @@ public class Database extends SQLiteOpenHelper {
         updatesMade = true;
     }
 
-    public synchronized void insert(RfEmitter emitter) {
-        synchronized (sqlSampleInsert) {
-            //Log.d(TAG, "Inserting " + emitter.logString() + " into db");
-            sqlSampleInsert.bindString(1, emitter.getId());
-            sqlSampleInsert.bindString(2, String.valueOf(emitter.getType()));
-            sqlSampleInsert.bindString(3, String.valueOf(emitter.getTrust()));
-            sqlSampleInsert.bindString(4, String.valueOf(emitter.getLat()));
-            sqlSampleInsert.bindString(5, String.valueOf(emitter.getLon()));
-            sqlSampleInsert.bindString(6, String.valueOf(emitter.getRadius()));
-            sqlSampleInsert.bindString(7, emitter.getNote());
+    /**
+     * Insert a new RF emitter into the database.
+     *
+     * @param emitter The emitter to be added.
+     */
+    public void insert(RfEmitter emitter) {
+        //Log.d(TAG, "Inserting " + emitter.logString() + " into db");
+        sqlSampleInsert.bindString(1, emitter.getId());
+        sqlSampleInsert.bindString(2, String.valueOf(emitter.getType()));
+        sqlSampleInsert.bindString(3, String.valueOf(emitter.getTrust()));
+        sqlSampleInsert.bindString(4, String.valueOf(emitter.getLat()));
+        sqlSampleInsert.bindString(5, String.valueOf(emitter.getLon()));
+        sqlSampleInsert.bindString(6, String.valueOf(emitter.getRadius()));
+        sqlSampleInsert.bindString(7, emitter.getNote());
 
-            sqlSampleInsert.executeInsert();
-            sqlSampleInsert.clearBindings();
-            updatesMade = true;
-        }
+        sqlSampleInsert.executeInsert();
+        sqlSampleInsert.clearBindings();
+        updatesMade = true;
     }
 
-    public synchronized void update(RfEmitter emitter) {
+    /**
+     * Update information about an emitter already existing in the database
+     *
+     * @param emitter The emitter to be updated
+     */
+    public void update(RfEmitter emitter) {
         //Log.d(TAG, "Updating " + emitter.logString() + " in db");
         // the data fields
         sqlSampleUpdate.bindString(1, String.valueOf(emitter.getTrust()));
@@ -177,7 +206,14 @@ public class Database extends SQLiteOpenHelper {
         updatesMade = true;
     }
 
-    public synchronized HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
+    /**
+     * Return a list of all emitters of a specified type within a bounding box.
+     *
+     * @param rfType The type of emitter the caller is interested in
+     * @param bb The lat,lon bounding box.
+     * @return A collection of RF emitter identifications
+     */
+    public HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
         HashSet<RfIdentification> rslt = new HashSet<RfIdentification>();
         String query = "SELECT " +
                 COL_RFID + " " +
@@ -205,7 +241,13 @@ public class Database extends SQLiteOpenHelper {
         return rslt;
     }
 
-    public synchronized RfEmitter getEmitter(RfIdentification ident) {
+    /**
+     * Get all the information we have on an RF emitter
+     *
+     * @param ident The identification of the emitter caller wants
+     * @return A emitter object with all the information we have. Or null if we have nothing.
+     */
+    public RfEmitter getEmitter(RfIdentification ident) {
         RfEmitter rslt = null;
         String query = "SELECT " +
                 COL_TYPE + ", " +
