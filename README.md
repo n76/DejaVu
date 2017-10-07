@@ -32,6 +32,8 @@ In the NLP Controller app (interface for µg UnifiedNlp) select the "Déjá Vu L
 
 When enabled, microG will request you grant location permissions to this backend. This is required so that the backend can monitor mobile/cell tower data and so that it can monitor the positions reported by the GPS.
 
+Note: The microG configuration check requires a location from a location backend to indicate that it is setup properly. However this backend will not return a location until it has mapped at least one mobile cell tower or two WLAN/WiFi access points. So it is necessary to run an app that uses the GPS for a while before this backend will report information to microG. You may wish to also install a different backend to verify microG setup quickly.
+
 Collecting RF Emitter Data
 ======================
 To conserve power the collection process does not actually turn on the GPS. If some other app turns on the app, for example a map or navigation app, then the backend will monitor the location and collect RF emitters data.
@@ -79,6 +81,12 @@ License
 =======
 
 Most of this project is licensed by GNU GPL. The Kalman filter code retains its original MIT license.
+
+Icon
+----
+The icon for this project is derived from two sources:
+
+[A globe icon](https://commons.wikimedia.org/wiki/File:Blue_globe_icon.svg) and [a map pin icon](https://commons.wikimedia.org/wiki/File:Map_pin_icon.svg) both released under a [Creative Commons share alike license](https://creativecommons.org/licenses/by-sa/3.0/deed.en).
 
 GNU General Public License
 --------------------------
