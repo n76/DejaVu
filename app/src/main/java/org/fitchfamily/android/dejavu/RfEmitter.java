@@ -33,7 +33,7 @@ public class RfEmitter {
     private static final double METER_TO_DEG = 1.0 / DEG_TO_METER;
 
     private static final long SECONDS = 1000;               // In milliseconds
-    private static final long MINUTES = 60 * SECONDS;       // In milliseconds
+    private static final long MINUTES = 60 * SECONDS;
     private static final long HOURS = 60 * MINUTES;
     private static final long DAYS = HOURS * 24;
 
@@ -118,6 +118,13 @@ public class RfEmitter {
         initSelf(mType, ident, signal);
     }
 
+    /**
+     * Shared/uniform initialization, called from the various constructors we allow.
+     *
+     * @param mType The type of the RF emitter (WLAN, MOBILE, etc.)
+     * @param ident The identification of the emitter. Must be unique within type
+     * @param signal The current signal level measurement in ASU
+     */
     private void initSelf(EmitterType mType, String ident, int signal) {
         type = mType;
         id = ident;
@@ -132,21 +139,33 @@ public class RfEmitter {
             changeStatus(EmitterStatus.STATUS_BLACKLISTED, "initSelf()");
     }
 
+    /**
+     * On equality check, we only check that our type and ID match as that
+     * uniquely identifies our RF emitter.
+     *
+     * @param o The object to check for equality
+     * @return True if the objects should be considered the same.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof RfEmitter)) return false;
 
         RfEmitter e = (RfEmitter) o;
-        if (!id.equals(e.id)) return false;
-
-        return true;
+        return getRfIdent().equals(e);
     }
 
+    /**
+     * Hash code is used to determine unique objects. Our "uniqueness" is
+     * based on which "real life" RF emitter we model, not our current
+     * coverage, etd. So our hash code should be the same as the hash
+     * code of our identification.
+     *
+     * @return A hash code for this object.
+     */
     @Override
     public int hashCode() {
-        int result = id.hashCode();
-        return result;
+        return getRfIdent().hashCode();
     }
 
     public EmitterType getType() {
@@ -207,18 +226,38 @@ public class RfEmitter {
         return note;
     }
 
+    /**
+     * All RfEmitter objects are managed through a cache. The cache needs ages out
+     * emitters that have not been seen (or used) in a while. To do that it needs
+     * to maintain age information for each RfEmitter object. Having the RfEmitter
+     * object itself store the cache age is a bit of a hack, but we do it anyway.
+     *
+     * @return The current cache age.
+     */
     public int getAge() {
         return ageSinceLastUse;
     }
 
+    /**
+     * Resets the cache age to zero.
+     */
     public void resetAge() {
         ageSinceLastUse = 0;
     }
 
+    /**
+     * Increment the cache age for this object.
+     */
     public void incrementAge() {
         ageSinceLastUse++;
     }
 
+    /**
+     * Periodically the cache sync's all dirty objects to the flash database.
+     * This routine is called by the cache to determine if it needs to be sync'd.
+     *
+     * @return True if this RfEmitter needs to be written to flash.
+     */
     public boolean syncNeeded() {
         return (status == EmitterStatus.STATUS_NEW) ||
                 (status == EmitterStatus.STATUS_CHANGED) ||
@@ -226,6 +265,13 @@ public class RfEmitter {
                         (coverage != null));
     }
 
+    /**
+     * Synchronize this object to the flash based database. This method is called
+     * by the cache when it is an appropriate time to assure the flash based
+     * database is up to date with our current coverage, trust, etc.
+     *
+     * @param db The database we should write our data to.
+     */
     public void sync(Database db) {
         EmitterStatus newStatus = status;
 
@@ -251,8 +297,8 @@ public class RfEmitter {
 
             case STATUS_CHANGED:
                 // In database but we have changes
-                if (trust < 0) {
-                    Log.d(TAG, "sync('" + logString() + "') - Trust below zero, dropping from database.");
+                if (trust < MINIMUM_TRUST) {
+                    Log.d(TAG, "sync('" + logString() + "') - Trust below minimum, dropping from database.");
                     db.drop(this);
                 } else
                     db.update(this);
@@ -271,6 +317,13 @@ public class RfEmitter {
         return "RF Emitter: Type=" + type + ", ID='" + id + "', ASU=" + asu + ", Note='" + note + "'";
     }
 
+    /**
+     * Given an emitter type, return the various characteristics we need to know
+     * to model it.
+     *
+     * @param t An emitter type (WLAN, MOBILE, etc.)
+     * @return The characteristics needed to model the emitter
+     */
     public static RfCharacteristics getRfCharacteristics(EmitterType t) {
         switch (t) {
             case WLAN:
@@ -312,6 +365,12 @@ public class RfEmitter {
         );
     }
 
+    /**
+     * Unfortunately some types of RF emitters are very mobile and a mobile emitter
+     * should not be used to estimate our position. Part of the way to deal with this
+     * issue is to maintain a trust metric. Trust has a maximum value, so when we
+     * are asked to increment trust we need to check that we have not passed the limit.
+     */
     public void incrementTrust() {
         //Log.d(TAG, "incrementTrust('"+id+"') - entry.");
         if (canUpdate()) {
@@ -326,6 +385,10 @@ public class RfEmitter {
         }
     }
 
+    /**
+     * Decrease our trust of this emitter. This can happen because we expected to see it at our
+     * current location and didn't.
+     */
     public void decrementTrust() {
         if (canUpdate()) {
             long oldTrust = trust;
@@ -335,6 +398,14 @@ public class RfEmitter {
         }
     }
 
+    /**
+     * When a scan first detects an emitter a RfEmitter object is created. But at that time
+     * no lookup of the saved information is needed or made. When appropriate, the database
+     * is checked for saved information about the emitter and this method is called to add
+     * that saved information to our model.
+     *
+     * @param emitterInfo Saved information about this emitter from the database.
+     */
     public void updateInfo(Database.EmitterInfo emitterInfo) {
         if (emitterInfo != null) {
             if (coverage == null)
@@ -349,6 +420,12 @@ public class RfEmitter {
         }
     }
 
+    /**
+     * Update our estimate of the coverage and location of the emitter based on a
+     * position report from the GPS system.
+     *
+     * @param gpsLoc A position report from a trusted (non RF emitter) source
+     */
     public void updateLocation(Location gpsLoc) {
 
         if (status == EmitterStatus.STATUS_BLACKLISTED)
@@ -426,10 +503,15 @@ public class RfEmitter {
         }
     }
 
-    // User facing location value. Differs from internal one in that we don't report
-    // locations that are guarded due to being new or moved. And we work internally
-    // with radius values that fit within a bounding box but we report a radius that
-    // extends to the corners of the bounding box.
+    /**
+     * User facing location value. Differs from internal one in that we don't report
+     * locations that are guarded due to being new or moved. And we work internally
+     * with radius values that fit within a bounding box but we report a radius that
+     * extends to the corners of the bounding box.
+     *
+     * @return The coverage estimate for our RF emitter or null if we don't trust our
+     * information.
+     */
     public  Location getLocation() {
         if ((trust < REQUIRED_TRUST) || (status == EmitterStatus.STATUS_BLACKLISTED))
             return null;
@@ -444,6 +526,13 @@ public class RfEmitter {
         return boundaryBoxSized;
     }
 
+    /**
+     * If we have any coverage information, returns an estimate of that coverage.
+     * For convenience, we use the standard Location record as it contains a center
+     * point and radius (accuracy).
+     *
+     * @return Coverage estimate for emitter or null it does not exist.
+     */
     private Location _getLocation() {
         if (coverage == null)
             return null;
@@ -471,6 +560,12 @@ public class RfEmitter {
         return location;
     }
 
+    /**
+     * As part of our effort to not use mobile emitters in estimating or location
+     * we blacklist ones that match observed patterns.
+     *
+     * @return True if the emitter is blacklisted (should not be used in position computations).
+     */
     private boolean blacklistEmitter() {
         switch (this.type) {
             case WLAN:
@@ -483,6 +578,14 @@ public class RfEmitter {
         return false;
     }
 
+    /**
+     * Checks the note field (where the SSID is saved) to see if it appears to be
+     * an AP that is likely to be moving. Typical checks are to see if substrings
+     * in the SSID match that of cell phone manufacturers or match known patterns
+     * for public transport (busses, trains, etc.) or in car WLAN defaults.
+     *
+     * @return True if emitter should be blacklisted.
+     */
     private boolean blacklistWifi() {
         final String lc = note.toLowerCase(Locale.US);
 
@@ -573,6 +676,13 @@ public class RfEmitter {
         );
     }
 
+    /**
+     * Only some types of emitters can be updated when a GPS position is received. A
+     * simple check but done in a couple places so extracted out to this routine so that
+     * we are consistent in how we check things.
+     *
+     * @return True if coverage and/or trust can be updated.
+     */
     private boolean canUpdate() {
         boolean rslt = true;
         switch (status) {
@@ -584,6 +694,14 @@ public class RfEmitter {
         return rslt;
     }
 
+    /**
+     * Our status can only make a small set of allowed transitions. Basically a simple
+     * state machine. To assure our transistions are all legal, this routine is used for
+     * all changes.
+     *
+     * @param newStatus The desired new status (state)
+     * @param info Logging information for debug purposes
+     */
     private void changeStatus( EmitterStatus newStatus, String info) {
         if (newStatus == status)
             return;

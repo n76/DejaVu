@@ -9,6 +9,11 @@ import android.os.SystemClock;
  * Created by tfitch on 8/31/17.
  */
 
+/**
+ * A two dimensional Kalman filter for estimating actual position from multiple
+ * measurements. We cheat and use two one dimensional Kalman filters which works
+ * because our two dimensions are orthangonal.
+ */
 public class Kalman {
     private static final double DEG_TO_METER = 111225.0;
     private static final double METER_TO_DEG = 1.0 / DEG_TO_METER;

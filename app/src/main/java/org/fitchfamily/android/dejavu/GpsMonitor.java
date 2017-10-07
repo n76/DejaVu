@@ -16,6 +16,13 @@ import android.util.Log;
  * Created by tfitch on 8/31/17.
  */
 
+/**
+ * A passive GPS monitor. We don't want to turn on the GPS as the backend
+ * runs continuously and we would quickly drain the battery. But if some
+ * other app turns on the GPS we want to listen in on its reports. The GPS
+ * reports are used as a primary (trusted) source of position that we can
+ * use to map the coverage of the RF emitters we detect.
+ */
 public class GpsMonitor extends Service implements LocationListener {
     private static final String TAG = "DejaVu GpsMonitor";
 
@@ -64,6 +71,14 @@ public class GpsMonitor extends Service implements LocationListener {
         }
     }
 
+    /**
+     * The passive provider we are monitoring will give positions from all
+     * providers on the phone (including ourselves) we ignore all providers other
+     * than the GPS. The GPS reports we pass on to our main backend service for
+     * it to use in mapping RF emitter coverage.
+     *
+     * @param location A position report from a location provider
+     */
     @Override
     public void onLocationChanged(Location location) {
         // Log.d(TAG, "onLocationChanged()");
