@@ -3,6 +3,40 @@ package org.fitchfamily.android.dejavu;
 /*
  *    DejaVu - A location provider backend for microG/UnifiedNlp
  *
+ */
+
+/**
+ * Created by tfitch on 8/31/17.
+ */
+
+/*
+ * This package inspired by https://github.com/villoren/KalmanLocationManager.git
+ */
+
+
+/**
+ * Copyright (c) 2014 Renato Villone
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Changes and modifications to the original file:
+ *
  *    Copyright (C) 2017 Tod Fitch
  *
  *    This program is Free Software: you can redistribute it and/or modify
@@ -19,10 +53,6 @@ package org.fitchfamily.android.dejavu;
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/**
- * Created by tfitch on 8/31/17.
- */
-
 import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
@@ -31,7 +61,7 @@ import android.os.SystemClock;
 /**
  * A two dimensional Kalman filter for estimating actual position from multiple
  * measurements. We cheat and use two one dimensional Kalman filters which works
- * because our two dimensions are orthangonal.
+ * because our two dimensions are orthogonal.
  */
 public class Kalman {
     private static final double DEG_TO_METER = 111225.0;
