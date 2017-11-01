@@ -48,9 +48,6 @@ import java.util.Locale;
 public class RfEmitter {
     private final static String TAG = "DejaVu RfEmitter";
 
-    private static final double DEG_TO_METER = 111225.0;
-    private static final double METER_TO_DEG = 1.0 / DEG_TO_METER;
-
     private static final long SECONDS = 1000;               // In milliseconds
     private static final long MINUTES = 60 * SECONDS;
     private static final long HOURS = 60 * MINUTES;
@@ -485,11 +482,11 @@ public class RfEmitter {
 
         boolean changed = false;
         if (sampleDistance > coverage.radius) {
-            double north = coverage.latitude + (coverage.radius * METER_TO_DEG);
-            double south = coverage.latitude - (coverage.radius * METER_TO_DEG);
+            double north = coverage.latitude + (coverage.radius * BackendService.METER_TO_DEG);
+            double south = coverage.latitude - (coverage.radius * BackendService.METER_TO_DEG);
             double cosLat = Math.cos(Math.toRadians(coverage.latitude));
-            double east = coverage.longitude + (coverage.radius * METER_TO_DEG) * cosLat;
-            double west = coverage.longitude - (coverage.radius * METER_TO_DEG) * cosLat;
+            double east = coverage.longitude + (coverage.radius * BackendService.METER_TO_DEG) * cosLat;
+            double west = coverage.longitude - (coverage.radius * BackendService.METER_TO_DEG) * cosLat;
 
             if (gpsLoc.getLatitude() > north) {
                 north = gpsLoc.getLatitude();
@@ -511,10 +508,10 @@ public class RfEmitter {
                 changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
                 coverage.latitude = (north + south)/2.0;
                 coverage.longitude = (east + west)/2.0;
-                coverage.radius = (float)((north - coverage.latitude) * DEG_TO_METER);
+                coverage.radius = (float)((north - coverage.latitude) * BackendService.DEG_TO_METER);
                 cosLat = Math.cos(Math.toRadians(coverage.latitude));
                 if (cosLat != 0.0) {
-                    float ewRadius = (float) (((east - coverage.longitude) * DEG_TO_METER) / cosLat);
+                    float ewRadius = (float) (((east - coverage.longitude) * BackendService.DEG_TO_METER) / cosLat);
                     if (ewRadius > coverage.radius)
                         coverage.radius = ewRadius;
                 }

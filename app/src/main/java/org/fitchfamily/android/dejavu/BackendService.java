@@ -71,6 +71,10 @@ public class BackendService extends LocationBackendService {
 
     public static final String LOCATION_PROVIDER = "DejaVu";
 
+    public static final double DEG_TO_METER = 111225.0;
+    public static final double METER_TO_DEG = 1.0 / DEG_TO_METER;
+    public static final double MIN_COS = 0.01;      // for things that are dividing by the cosine
+
     // Define range of received signal strength to be used for all emitter types.
     // Basically use the same range of values for LTE and WiFi as GSM defaults to.
     public static final int MAXIMUM_ASU = 31;
@@ -115,10 +119,8 @@ public class BackendService extends LocationBackendService {
 
     private Kalman gpsLocation;             // Filtered GPS (because GPS is so bad on Moto G4 Play)
 
-    private Kalman kalmanLocationEstimate;    // Our best guess for our current location
-
-    private Location weightedAverageLocation;
-    private long lastLocationComputeTime;
+    private WeightedAverage weightedAverageLocation;
+    private Collection<Location> mobileLocations;
 
     //
     // Periodic process information.
@@ -146,9 +148,6 @@ public class BackendService extends LocationBackendService {
     private long lastMobileScanPeriod;
     private long lastWlanScanPeriod;
     private long reportPeriod;
-    private boolean wifiSeen;
-    private boolean mobileSeen;
-
 
     //
     // We want only a single background thread to do all the work but we have a couple
@@ -191,8 +190,6 @@ public class BackendService extends LocationBackendService {
         reportPeriod = System.currentTimeMillis() / REPORTING_INTERVAL;
         lastMobileScanPeriod = (System.currentTimeMillis() / MOBILE_SCAN_INTERVAL) - 1;
         lastWlanScanPeriod = (System.currentTimeMillis() / WLAN_SCAN_INTERVAL) - 1;
-        wifiSeen = false;
-        mobileSeen = false;
 
         if (emitterCache == null)
             emitterCache = new Cache(this);
@@ -640,9 +637,6 @@ public class BackendService extends LocationBackendService {
         // the emitters are known to be seen at.
         Collection<Location> locations = updateEmitters( emitters, myWork.loc, myWork.time);
 
-        // Compute our position based on the coverage areas for each emitter seen.
-        computePostion(locations, myWork.rfType, myWork.time);
-
         // If we are dealing with very movable emitters, then try to detect ones that
         // have moved out of the area. We do that by collecting the set of emitters
         // that we expected to see in this area based on the GPS.
@@ -659,7 +653,29 @@ public class BackendService extends LocationBackendService {
             }
             updateExpected(bb, myWork.rfType);
         }
-        endOfPeriodProcessing(myWork.time);
+        switch (myWork.rfType) {
+            case WLAN:
+                // Emitters, especially Wifi APs, can be mobile. We cull them by making
+                // subsets where all members of the set are reasonably close to one
+                // another and then take the largest group.
+                //
+                // To protect against moving WiFi APs,require the largest group
+                // of APs has at least two members.
+                locations = culledEmitters(locations, rfChar.moveDetectDistance);
+                if ((locations != null) || (locations.size() >= rfChar.minCount)) {
+                    if (mobileLocations != null)
+                        locations.addAll(mobileLocations);
+                    endOfPeriodProcessing(myWork, locations);
+                } else {
+                    if (mobileLocations != null)
+                        endOfPeriodProcessing(myWork,mobileLocations);
+                }
+                break;
+
+            case MOBILE:
+                mobileLocations = locations;
+                break;
+        }
     }
 
     /**
@@ -698,55 +714,15 @@ public class BackendService extends LocationBackendService {
      * seen for the end of period processing.
      *
      * @param locations The set of coverage information for the current observations
-     * @param rfType The type of RF emitter the coverage info is about
-     * @param timeMs The time the observations were collected.
+     * @param myWork All the information about the current work item.
      */
-    private synchronized void computePostion(Collection<Location> locations,
-                                             RfEmitter.EmitterType rfType,
-                                             long timeMs) {
+    private synchronized void computePostion(Collection<Location> locations, WorkItem myWork) {
         if (locations == null)
             return;
 
-        RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(rfType);
+        RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(myWork.rfType);
 
-        // Emitters, especially Wifi APs, can be mobile. We cull them by making
-        // subsets where all members of the set are reasonably close to one
-        // another and then take the largest group.
-        //
-        // To protect against moving WiFi APs,require the largest group
-        // of APs has at least two members.
-        locations = culledEmitters(locations, rfChar.moveDetectDistance);
-
-        if ((locations == null) || (locations.size() < rfChar.minCount))
-            return;
-
-        switch (rfType) {
-            case WLAN:
-                wifiSeen = true;
-                break;
-
-            case MOBILE:
-                mobileSeen = true;
-                break;
-        }
-
-        //
-        // Build up both a Kalman filter estimate of our location and a weighed average estimate.
-        // The Kalman is excellent when we have multiple emitters in each sample period but
-        // falsely converges on a single mobile cell tower if that is all we have. A weighted
-        // average gives worse position with multiple emitters but does pretty well when all
-        // we have to work with are single cell towers.
-        //
-
-        // First update the Kalman filter
-        for (Location l:locations) {
-            if (kalmanLocationEstimate == null) {
-                kalmanLocationEstimate = new Kalman(l,POSITION_COORDINATE_NOISE);
-            } else
-                kalmanLocationEstimate.update(l);
-        }
-
-        // Now for the weighted average.
+        // Determine location using a weighted average.
         //
         // To smooth out transitions between when we have lots of wifi APs and none or
         // when the cell tower the phone detects changes we will average in our last
@@ -754,70 +730,30 @@ public class BackendService extends LocationBackendService {
         // estimate based on how long it has been and how likely it is that we are moving.
 
         if (weightedAverageLocation != null) {
-            float accuracy = weightedAverageLocation.getAccuracy();
-            accuracy += EXPECTED_SPEED * (timeMs - lastLocationComputeTime);
-            //Log.d(TAG,"computePostion() - adjusting old accuracy from " + weightedAverageLocation.getAccuracy() + " to " + accuracy);
-            weightedAverageLocation.setAccuracy(accuracy);
-
-            // Average in previous value if it exits. Should smooth
-            // motion from single cell report to multiple wifi AP report
-            // and back.
-            locations.add(weightedAverageLocation);
+            Location owa = weightedAverageLocation.result();
+            if (owa != null) {
+                float accuracy = owa.getAccuracy();
+                accuracy += EXPECTED_SPEED * (myWork.time - owa.getTime());
+                //Log.d(TAG,"computePostion() - adjusting old accuracy from " + weightedAverageLocation.getAccuracy() + " to " + accuracy);
+                owa.setAccuracy(accuracy);
+                owa.setTime(myWork.time);
+                locations.add(owa);
+            }
         }
 
-        weightedAverageLocation = weightedAverage(locations, timeMs);
-        lastLocationComputeTime = timeMs;
-    }
+        if (weightedAverageLocation == null)
+            weightedAverageLocation = new WeightedAverage();
+        weightedAverageLocation.reset();
 
-    /**
-     * Compute an average value weighted by the estimated coverage radius
-     * with smaller coverage given higher weight.
-     *
-     * We rely on having the accuracy values being positive non-zero.
-     *
-     * @param locations The set of emitter coverages to use to compute a location
-     * @param timeMs The time associated with the collection of those coverages
-     * @return A position estimate
-     */
-    private Location weightedAverage(Collection<Location> locations, long timeMs) {
-        double totalWeight = 0.0;
-        double lon = 0.0;
-        double lat = 0.0;
-        double acc = 0.0;
-
-        if (locations.size() > 0) {
-            //Log.d(TAG, "weightedAverage(" + locations.size() + ") - entry.");
-             for (Location l : locations) {
-                 float thisAcc = l.getAccuracy();
-                 if (thisAcc < MINIMUM_BELIEVABLE_ACCURACY)
-                     thisAcc = MINIMUM_BELIEVABLE_ACCURACY;
-                double thisWeight = 1000.0 / thisAcc;
-                totalWeight += thisWeight;
-
-                lon += l.getLongitude() * thisWeight;
-                lat += l.getLatitude() * thisWeight;
-                acc += (l.getAccuracy() * l.getAccuracy()) * thisWeight;
-            }
-
-            final Location location = new Location(LOCATION_PROVIDER);
-
-            location.setTime(timeMs);
-            if (Build.VERSION.SDK_INT >= 17)
-                location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
-            location.setLatitude(lat / totalWeight);
-            location.setLongitude(lon / totalWeight);
-            float thisAcc = (float) (Math.sqrt(acc)/totalWeight);
+        for (Location l : locations) {
+            float thisAcc = l.getAccuracy();
             if (thisAcc < MINIMUM_BELIEVABLE_ACCURACY)
                 thisAcc = MINIMUM_BELIEVABLE_ACCURACY;
-            location.setAccuracy(thisAcc);
+            double thisWeight = 1000.0 / thisAcc;
 
-            Bundle extras = new Bundle();
-            extras.putLong("AVERAGED_OF", locations.size());
-            location.setExtras(extras);
+            weightedAverageLocation.add(l, thisWeight);
 
-            return location;
         }
-        return null;
     }
 
     /**
@@ -930,9 +866,10 @@ public class BackendService extends LocationBackendService {
      * or four seconds. Another reason is that we can average more samples into each
      * report so there is a chance that our position computation is more accurate.
      *
-     * @param timeMs The time associated with the current set of observations
+     * @param myWork All the information about the current observations
+     * @param locations Locations for the RF emitters in the current observations
      */
-    private void endOfPeriodProcessing(long timeMs) {
+    private void endOfPeriodProcessing(WorkItem myWork, Collection<Location> locations) {
         if (emitterCache == null) {
             Log.d(TAG,"endOfPeriodProcessing() - emitterCache is null?!?");
             return;
@@ -941,13 +878,16 @@ public class BackendService extends LocationBackendService {
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-        long thisProcessPeriod = timeMs / REPORTING_INTERVAL;;
+        long thisProcessPeriod = myWork.time / REPORTING_INTERVAL;;
 
         // End of process period. Adjust the trust values of all
         // the emitters we've seen and the ones we expected
         // to see but did not.
         if (thisProcessPeriod != reportPeriod) {
             //Log.d(TAG,"endOfPeriodProcessing() - Starting new process period.");
+
+            // Compute our position based on the coverage areas for each emitter seen.
+            computePostion(locations, myWork);
 
             //
             // Increment the trust of the emitters we've seen and decrement the trust
@@ -972,23 +912,15 @@ public class BackendService extends LocationBackendService {
             emitterCache.sync();
 
 
-            // Report location to UnifiedNlp at end of each processing period. If we've seen
-            // any WiFi APs then the kalman filtered location is probably better. If we've only
-            // seen cell towers then a weighted average is probably better.
-            if (wifiSeen && (kalmanLocationEstimate != null)) {
-                //Log.d(TAG,"endOfPeriodProcessing() - reporting Kalman position.");
-                report(kalmanLocationEstimate.getLocation());
-            } else if (mobileSeen && (weightedAverageLocation != null)) {
-                //Log.d(TAG,"endOfPeriodProcessing() - reporting weighed average position.");
-                report(weightedAverageLocation);
-            }
+            Location wal = null;
+            if (weightedAverageLocation != null)
+                wal = weightedAverageLocation.result();
+            if (wal != null)
+                report(wal);
 
-            kalmanLocationEstimate.setSamples(0);
             reportPeriod = thisProcessPeriod;
             seenSet = new HashSet<RfIdentification>();
             expectedSet = new HashSet<RfIdentification >();
-            wifiSeen = false;
-            mobileSeen = false;
         }
     }
 

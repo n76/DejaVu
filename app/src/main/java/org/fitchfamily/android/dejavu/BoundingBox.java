@@ -26,9 +26,6 @@ import android.accessibilityservice.AccessibilityService;
 import android.location.Location;
 
 public class BoundingBox {
-    private static final double DEG_TO_METER = 111225.0;
-    private static final double METER_TO_DEG = 1.0 / DEG_TO_METER;
-
     private double north;
     private double south;
     private double east;
@@ -66,11 +63,11 @@ public class BoundingBox {
      * @param radius The radius of the coverage area.
      */
     public void update(double lat, double lon, float radius) {
-        double locNorth = lat + (radius * METER_TO_DEG);
-        double locSouth = lat - (radius * METER_TO_DEG);
+        double locNorth = lat + (radius * BackendService.METER_TO_DEG);
+        double locSouth = lat - (radius * BackendService.METER_TO_DEG);
         double cosLat = Math.cos(Math.toRadians(lat));
-        double locEast = lon + (radius * METER_TO_DEG) * cosLat;
-        double locWest = lon - (radius * METER_TO_DEG) * cosLat;
+        double locEast = lon + (radius * BackendService.METER_TO_DEG) * cosLat;
+        double locWest = lon - (radius * BackendService.METER_TO_DEG) * cosLat;
 
         north = Math.max(north,locNorth);
         south = Math.min(south,locSouth);

@@ -64,9 +64,6 @@ import android.os.SystemClock;
  * because our two dimensions are orthogonal.
  */
 public class Kalman {
-    private static final double DEG_TO_METER = 111225.0;
-    private static final double METER_TO_DEG = 1.0 / DEG_TO_METER;
-
     private static final double ALTITUDE_NOISE = 10.0;
 
     private static final float MOVING_THRESHOLD = 0.7f;     // meters/sec (2.5 kph ~= 0.7 m/s)
@@ -101,19 +98,19 @@ public class Kalman {
 
     public Kalman(Location location, double coordinateNoise) {
         final double accuracy = location.getAccuracy();
-        final double coordinateNoiseDegrees = coordinateNoise * METER_TO_DEG;
+        final double coordinateNoiseDegrees = coordinateNoise * BackendService.METER_TO_DEG;
         double position, noise;
         long timeMs = location.getTime();
 
         // Latitude
         position = location.getLatitude();
-        noise = accuracy * METER_TO_DEG;
+        noise = accuracy * BackendService.METER_TO_DEG;
         mLatTracker = new Kalman1Dim(coordinateNoiseDegrees, timeMs);
         mLatTracker.setState(position, 0.0, noise);
 
         // Longitude
         position = location.getLongitude();
-        noise = accuracy * Math.cos(Math.toRadians(location.getLatitude())) * METER_TO_DEG;
+        noise = accuracy * Math.cos(Math.toRadians(location.getLatitude())) * BackendService.METER_TO_DEG;
         mLonTracker = new Kalman1Dim(coordinateNoiseDegrees, timeMs);
         mLonTracker.setState(position, 0.0, noise);
 
@@ -144,12 +141,12 @@ public class Kalman {
 
         // Latitude
         position = location.getLatitude();
-        noise = accuracy * METER_TO_DEG;
+        noise = accuracy * BackendService.METER_TO_DEG;
         mLatTracker.update(position, noise);
 
         // Longitude
         position = location.getLongitude();
-        noise = accuracy * Math.cos(Math.toRadians(location.getLatitude())) * METER_TO_DEG ;
+        noise = accuracy * Math.cos(Math.toRadians(location.getLatitude())) * BackendService.METER_TO_DEG ;
         mLonTracker.update(position, noise);
 
         // Altitude
@@ -195,14 +192,14 @@ public class Kalman {
         if (mAltTracker != null)
             location.setAltitude(mAltTracker.getPosition());
 
-        float accuracy = (float) (mLatTracker.getAccuracy() * DEG_TO_METER);
+        float accuracy = (float) (mLatTracker.getAccuracy() * BackendService.DEG_TO_METER);
         if (accuracy < MIN_ACCURACY)
             accuracy = MIN_ACCURACY;
         location.setAccuracy(accuracy);
 
         // Derive speed from degrees/ms in lat and lon
-        double latVeolocity = mLatTracker.getVelocity() * DEG_TO_METER;
-        double lonVeolocity = mLonTracker.getVelocity() * DEG_TO_METER *
+        double latVeolocity = mLatTracker.getVelocity() * BackendService.DEG_TO_METER;
+        double lonVeolocity = mLonTracker.getVelocity() * BackendService.DEG_TO_METER *
                 Math.cos(Math.toRadians(location.getLatitude()));
         float speed = (float) Math.sqrt((latVeolocity*latVeolocity)+(lonVeolocity*lonVeolocity));
         location.setSpeed(speed);
