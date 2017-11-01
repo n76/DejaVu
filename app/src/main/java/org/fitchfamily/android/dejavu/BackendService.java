@@ -610,12 +610,13 @@ public class BackendService extends LocationBackendService {
      * @param myWork
      */
     private synchronized void backgroundProcessing(WorkItem myWork) {
+        if (emitterCache == null)
+            return;
+
         if (seenSet == null)
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-        if (emitterCache == null)
-            return;
 
 
         Collection<RfEmitter> emitters = new HashSet<>();
@@ -653,6 +654,7 @@ public class BackendService extends LocationBackendService {
             }
             updateExpected(bb, myWork.rfType);
         }
+
         switch (myWork.rfType) {
             case WLAN:
                 // Emitters, especially Wifi APs, can be mobile. We cull them by making
@@ -661,6 +663,7 @@ public class BackendService extends LocationBackendService {
                 //
                 // To protect against moving WiFi APs,require the largest group
                 // of APs has at least two members.
+                //Log.d(TAG, "WiFi APs seen: " + locations.toString());
                 locations = culledEmitters(locations, rfChar.moveDetectDistance);
                 if ((locations != null) && (locations.size() >= rfChar.minCount)) {
                     if (mobileLocations != null)
@@ -673,7 +676,9 @@ public class BackendService extends LocationBackendService {
                 break;
 
             case MOBILE:
-                mobileLocations = locations;
+                //Log.d(TAG, "Mobile towers seen: " + locations.toString());
+                mobileLocations = new HashSet<>();
+                mobileLocations.addAll(locations);
                 break;
         }
     }
