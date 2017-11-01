@@ -31,8 +31,8 @@
                 android:value="@string/summary" />
         </service>
 
-        <service android:name="org.fitchfamily.android.dejavu.GpsMonitor">
-            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+        <service android:name="org.fitchfamily.android.dejavu.GpsMonitor"
+            android:permission="android.permission.ACCESS_FINE_LOCATION" >
         </service>
     </application>
 
