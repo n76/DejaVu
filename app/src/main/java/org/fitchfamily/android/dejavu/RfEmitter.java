@@ -356,7 +356,7 @@ public class RfEmitter {
 
             case MOBILE:
                 return new RfCharacteristics(
-                        200 * METERS,       // reqdGpsAccuracy
+                        100 * METERS,       // reqdGpsAccuracy
                         500 * METERS,       // minimumRange
                         2 * KM,             // typicalRange
                         100 * KM,           // moveDetectDistance - In the desert there towers cover large areas
@@ -448,10 +448,6 @@ public class RfEmitter {
             return;
 
         if ((gpsLoc == null) || (gpsLoc.getAccuracy() > ourCharacteristics.reqdGpsAccuracy)) {
-            //String gpsAcc = "unknown";
-            //if (gpsLoc != null)
-            //    gpsAcc = String.valueOf(gpsLoc.getAccuracy());
-            //Log.d(TAG, "updateLocation("+id+") GPS not accurate enough to update coverage (" + gpsAcc + " > " + ourCharacteristics.reqdGpsAccuracy + ")");
             return;
         }
 
@@ -509,12 +505,9 @@ public class RfEmitter {
                 coverage.latitude = (north + south)/2.0;
                 coverage.longitude = (east + west)/2.0;
                 coverage.radius = (float)((north - coverage.latitude) * BackendService.DEG_TO_METER);
-                cosLat = Math.cos(Math.toRadians(coverage.latitude));
-                if (cosLat != 0.0) {
-                    float ewRadius = (float) (((east - coverage.longitude) * BackendService.DEG_TO_METER) / cosLat);
-                    if (ewRadius > coverage.radius)
-                        coverage.radius = ewRadius;
-                }
+                cosLat = Math.max(Math.cos(Math.toRadians(coverage.latitude)),BackendService.MIN_COS);
+                float ewRadius = (float)(((east - coverage.longitude) * BackendService.DEG_TO_METER) / cosLat);
+                coverage.radius = Math.max(coverage.radius, ewRadius);
             }
         }
     }
