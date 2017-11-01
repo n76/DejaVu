@@ -662,7 +662,7 @@ public class BackendService extends LocationBackendService {
                 // To protect against moving WiFi APs,require the largest group
                 // of APs has at least two members.
                 locations = culledEmitters(locations, rfChar.moveDetectDistance);
-                if ((locations != null) || (locations.size() >= rfChar.minCount)) {
+                if ((locations != null) && (locations.size() >= rfChar.minCount)) {
                     if (mobileLocations != null)
                         locations.addAll(mobileLocations);
                     endOfPeriodProcessing(myWork, locations);
