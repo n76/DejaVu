@@ -28,6 +28,8 @@ public class WeightedAverage {
     private int count;
     private long timeMs;
 
+    private float reportAccuracy;
+
     WeightedAverage() {
         reset();
     }
@@ -44,6 +46,7 @@ public class WeightedAverage {
         if (loc == null)
             return;
 
+        reportAccuracy = loc.getAccuracy();
         count++;
         //Log.d(TAG,"add() entry: weight="+weight+", count="+count);
 
@@ -77,7 +80,7 @@ public class WeightedAverage {
         location.setLatitude(meanLat);
         location.setLongitude(meanLon);
         if (count == 1) {
-            location.setAccuracy(BackendService.MINIMUM_BELIEVABLE_ACCURACY);
+            location.setAccuracy(reportAccuracy);
         } else {
             //double varLat = sLat / (wSumLat - 1);
             //double varLon = sLon / (wSumLon - 1);
