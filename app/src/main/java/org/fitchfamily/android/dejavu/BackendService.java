@@ -84,6 +84,8 @@ public class BackendService extends LocationBackendService {
     public static final float EXPECTED_SPEED = 120.0f / 3600;           // 120KPH (74 MPH)
     public static final float MINIMUM_BELIEVABLE_ACCURACY = 15.0F;
 
+    private static final double WEIGHTING_FACTOR = 1000.0;
+
     /**
      * Process noise for lat and lon.
      *
@@ -141,13 +143,13 @@ public class BackendService extends LocationBackendService {
     // So these numbers are the minimum time. Actual will be at least that based
     // on when we get GPS locations and/or update requests from microG/UnifiedNlp.
     //
-    private final static long WLAN_SCAN_INTERVAL = 2000;        // in milliseconds
-    private final static long MOBILE_SCAN_INTERVAL = 4000;      // in milliseconds
-    private final static long REPORTING_INTERVAL = 4000;        // in milliseconds
+    private final static long REPORTING_INTERVAL   = 3600;                      // in milliseconds
+    private final static long MOBILE_SCAN_INTERVAL = REPORTING_INTERVAL/2;      // in milliseconds
+    private final static long WLAN_SCAN_INTERVAL   = REPORTING_INTERVAL/3;      // in milliseconds
 
-    private long lastMobileScanPeriod;
-    private long lastWlanScanPeriod;
-    private long reportPeriod;
+    private long nextMobileScanTime;
+    private long nextWlanScanTime;
+    private long nextReportTime;
 
     //
     // We want only a single background thread to do all the work but we have a couple
@@ -187,9 +189,9 @@ public class BackendService extends LocationBackendService {
         Log.d(TAG, "onOpen() entry.");
         super.onOpen();
         instance = this;
-        reportPeriod = System.currentTimeMillis() / REPORTING_INTERVAL;
-        lastMobileScanPeriod = (System.currentTimeMillis() / MOBILE_SCAN_INTERVAL) - 1;
-        lastWlanScanPeriod = (System.currentTimeMillis() / WLAN_SCAN_INTERVAL) - 1;
+        nextReportTime = 0;
+        nextMobileScanTime = 0;
+        nextWlanScanTime = 0;
 
         if (emitterCache == null)
             emitterCache = new Cache(this);
@@ -324,16 +326,15 @@ public class BackendService extends LocationBackendService {
      * method will be called by Android.
      */
     private void startWiFiScan() {
-        // Throttle scanning for mobile towers. Generally each tower covers a significant amount
-        // of terrain so even if we are moving fairly rapidly we should remain in a single tower's
-        // coverage area for several seconds. No need to sample more ofen than that and we save
-        // resources on the phone.
-        long currentProcessPeriod = System.currentTimeMillis() / WLAN_SCAN_INTERVAL;
-        if (lastWlanScanPeriod == currentProcessPeriod)
+        // Throttle scanning for WiFi APs. In open terrain an AP could cover a kilometer.
+        // Even in a vehicle moving at highway speeds it can take several seconds to traverse
+        // the coverage area, no need to waste phone resources scanning too rapidly.
+        long currentProcessTime = System.currentTimeMillis();
+        if (currentProcessTime < nextWlanScanTime)
             return;
-        lastWlanScanPeriod = currentProcessPeriod;
+        nextWlanScanTime = currentProcessTime + WLAN_SCAN_INTERVAL;
 
-        // Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
+        //Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
         if (wm == null) {
             wm = (WifiManager) this.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         }
@@ -352,17 +353,18 @@ public class BackendService extends LocationBackendService {
         // of terrain so even if we are moving fairly rapidly we should remain in a single tower's
         // coverage area for several seconds. No need to sample more ofen than that and we save
         // resources on the phone.
-        long currentProcessPeriod = System.currentTimeMillis() / MOBILE_SCAN_INTERVAL;
-        if (lastMobileScanPeriod == currentProcessPeriod)
+
+        long currentProcessTime = System.currentTimeMillis();
+        if (currentProcessTime < nextMobileScanTime)
             return;
-        lastMobileScanPeriod = currentProcessPeriod;
+        nextMobileScanTime = currentProcessTime + MOBILE_SCAN_INTERVAL;
 
         // Scanning towers takes some time, so do it in a separate thread.
         if (mobileThread != null) {
             Log.d(TAG,"startMobileScan() - Thread exists.");
             return;
         }
-        // Log.d(TAG,"startMobileScan() - Starting collection thread.");
+        //Log.d(TAG,"startMobileScan() - Starting mobile signal scan thread.");
         mobileThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -618,12 +620,12 @@ public class BackendService extends LocationBackendService {
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
 
-
         Collection<RfEmitter> emitters = new HashSet<>();
 
         // Remember all the emitters we've seen during this processing period
         // and build a set of emitter objects for each RF emitter in the
         // observation set.
+
         for (Observation o : myWork.observations) {
             seenSet.add(o.getIdent());
             RfEmitter e = emitterCache.get(o.getIdent());
@@ -636,11 +638,13 @@ public class BackendService extends LocationBackendService {
 
         // Update emitter coverage based on GPS as needed and get the set of locations
         // the emitters are known to be seen at.
+
         Collection<Location> locations = updateEmitters( emitters, myWork.loc, myWork.time);
 
         // If we are dealing with very movable emitters, then try to detect ones that
         // have moved out of the area. We do that by collecting the set of emitters
         // that we expected to see in this area based on the GPS.
+
         RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(myWork.rfType);
         if ((myWork.loc != null) && (myWork.loc.getAccuracy() < rfChar.reqdGpsAccuracy)) {
             BoundingBox bb = new BoundingBox(myWork.loc.getLatitude(),
@@ -655,6 +659,7 @@ public class BackendService extends LocationBackendService {
             updateExpected(bb, myWork.rfType);
         }
 
+        //Log.d(TAG,"backgroundProcessing() - Got " + myWork.rfType + " data.");
         switch (myWork.rfType) {
             case WLAN:
                 // Emitters, especially Wifi APs, can be mobile. We cull them by making
@@ -663,24 +668,20 @@ public class BackendService extends LocationBackendService {
                 //
                 // To protect against moving WiFi APs,require the largest group
                 // of APs has at least two members.
+
                 //Log.d(TAG, "WiFi APs seen: " + locations.toString());
                 locations = culledEmitters(locations, rfChar.moveDetectDistance);
                 if ((locations != null) && (locations.size() >= rfChar.minCount)) {
-                    if (mobileLocations != null)
-                        locations.addAll(mobileLocations);
-                    endOfPeriodProcessing(myWork, locations);
-                } else {
-                    if (mobileLocations != null)
-                        endOfPeriodProcessing(myWork,mobileLocations);
+                    computePostion(locations, myWork);
                 }
                 break;
 
             case MOBILE:
                 //Log.d(TAG, "Mobile towers seen: " + locations.toString());
-                mobileLocations = new HashSet<>();
-                mobileLocations.addAll(locations);
+                computePostion(locations, myWork);
                 break;
         }
+        endOfPeriodProcessing(myWork);
     }
 
     /**
@@ -728,36 +729,12 @@ public class BackendService extends LocationBackendService {
         RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(myWork.rfType);
 
         // Determine location using a weighted average.
-        //
-        // To smooth out transitions between when we have lots of wifi APs and none or
-        // when the cell tower the phone detects changes we will average in our last
-        // position estimate. However we need to grow the uncertainty about the last
-        // estimate based on how long it has been and how likely it is that we are moving.
-
-        if (weightedAverageLocation != null) {
-            Location owa = weightedAverageLocation.result();
-            if (owa != null) {
-                float accuracy = owa.getAccuracy();
-                accuracy += EXPECTED_SPEED * (myWork.time - owa.getTime());
-                //Log.d(TAG,"computePostion() - adjusting old accuracy from " + weightedAverageLocation.getAccuracy() + " to " + accuracy);
-                owa.setAccuracy(accuracy);
-                owa.setTime(myWork.time);
-                locations.add(owa);
-            }
-        }
 
         if (weightedAverageLocation == null)
             weightedAverageLocation = new WeightedAverage();
-        weightedAverageLocation.reset();
 
         for (Location l : locations) {
-            float thisAcc = l.getAccuracy();
-            if (thisAcc < MINIMUM_BELIEVABLE_ACCURACY)
-                thisAcc = MINIMUM_BELIEVABLE_ACCURACY;
-            double thisWeight = 1000.0 / thisAcc;
-
-            weightedAverageLocation.add(l, thisWeight);
-
+            weightedAverageLocation.add(l, (WEIGHTING_FACTOR / Math.max(l.getAccuracy(),MINIMUM_BELIEVABLE_ACCURACY)));
         }
     }
 
@@ -872,9 +849,8 @@ public class BackendService extends LocationBackendService {
      * report so there is a chance that our position computation is more accurate.
      *
      * @param myWork All the information about the current observations
-     * @param locations Locations for the RF emitters in the current observations
      */
-    private void endOfPeriodProcessing(WorkItem myWork, Collection<Location> locations) {
+    private void endOfPeriodProcessing(WorkItem myWork) {
         if (emitterCache == null) {
             Log.d(TAG,"endOfPeriodProcessing() - emitterCache is null?!?");
             return;
@@ -883,50 +859,61 @@ public class BackendService extends LocationBackendService {
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-        long thisProcessPeriod = myWork.time / REPORTING_INTERVAL;;
 
         // End of process period. Adjust the trust values of all
         // the emitters we've seen and the ones we expected
         // to see but did not.
-        if (thisProcessPeriod != reportPeriod) {
-            //Log.d(TAG,"endOfPeriodProcessing() - Starting new process period.");
+        long currentProcessTime = System.currentTimeMillis();
+        if (currentProcessTime < nextReportTime)
+            return;
+        nextReportTime = currentProcessTime + REPORTING_INTERVAL;
 
-            // Compute our position based on the coverage areas for each emitter seen.
-            computePostion(locations, myWork);
+        //Log.d(TAG,"endOfPeriodProcessing() - Starting new process period.");
 
-            //
-            // Increment the trust of the emitters we've seen and decrement the trust
-            // of the emitters we expected to see but didn't.
+        // Increment the trust of the emitters we've seen and decrement the trust
+        // of the emitters we expected to see but didn't.
 
-            for (RfIdentification id : seenSet) {
-                RfEmitter e = emitterCache.get(id);
-                if (e != null)
-                    e.incrementTrust();
-            }
+        for (RfIdentification id : seenSet) {
+            RfEmitter e = emitterCache.get(id);
+            if (e != null)
+                e.incrementTrust();
+        }
 
-            for (RfIdentification  u : expectedSet) {
-                if (!seenSet.contains(u)) {
-                    RfEmitter e = emitterCache.get(u);
-                    if (e != null) {
-                        e.decrementTrust();
-                    }
+        for (RfIdentification  u : expectedSet) {
+            if (!seenSet.contains(u)) {
+                RfEmitter e = emitterCache.get(u);
+                if (e != null) {
+                    e.decrementTrust();
                 }
             }
+        }
 
-            // Sync all of our changes to the on flash database.
-            emitterCache.sync();
+        // Sync all of our changes to the on flash database.
 
+        emitterCache.sync();
 
-            Location wal = null;
-            if (weightedAverageLocation != null)
-                wal = weightedAverageLocation.result();
-            if (wal != null)
+        // Report our best guess of position
+
+        if (weightedAverageLocation != null) {
+            Location wal = weightedAverageLocation.result();
+            weightedAverageLocation.reset();
+            if (wal != null) {
                 report(wal);
 
-            reportPeriod = thisProcessPeriod;
-            seenSet = new HashSet<RfIdentification>();
-            expectedSet = new HashSet<RfIdentification >();
+                // To smooth out transitions between when we have lots of wifi APs and none or
+                // when the cell tower the phone detects changes we will average in our last
+                // position estimate. However we need to grow the uncertainty about the last
+                // estimate based on how long it has been and how likely it is that we are moving.
+
+                float accuracy = Math.max(wal.getAccuracy(),MINIMUM_BELIEVABLE_ACCURACY);
+                accuracy += EXPECTED_SPEED * (myWork.time - wal.getTime());
+                wal.setTime(myWork.time);
+                weightedAverageLocation.add(wal,WEIGHTING_FACTOR/accuracy);
+            }
         }
+
+        seenSet = new HashSet<RfIdentification>();
+        expectedSet = new HashSet<RfIdentification >();
     }
 
     /**
