@@ -922,19 +922,8 @@ public class BackendService extends LocationBackendService {
             weightedAverageLocation.reset();
             if (wal != null) {
                 report(wal);
-
-                // To smooth out transitions between when we have lots of wifi APs and none or
-                // when the cell tower the phone detects changes we will average in our last
-                // position estimate. However we need to grow the uncertainty about the last
-                // estimate based on how long it has been and how likely it is that we are moving.
-
-                float accuracy = Math.max(wal.getAccuracy(),MINIMUM_BELIEVABLE_ACCURACY);
-                accuracy += EXPECTED_SPEED * (myWork.time - wal.getTime());
-                wal.setTime(myWork.time);
-                weightedAverageLocation.add(wal,WEIGHTING_FACTOR/accuracy);
-
-                lastMobileId = "";      // Allow another mobile tower report.
             }
+            lastMobileId = "";      // Allow another mobile tower report.
         }
 
         seenSet = new HashSet<RfIdentification>();
