@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Corrected package ID in manifest
+- Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.0.1]
+### Changed
+- Corrected package ID in manifest
 
 ## [1.0.0]
 ### Added
