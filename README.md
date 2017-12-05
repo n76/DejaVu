@@ -65,7 +65,6 @@ Permissions Required
 |Permission|Use|
 |:----------|:---|
 ACCESS_COARSE_LOCATION|Allows backend to determine which cell towers your phone detects.
-|:----------|:---|
 ACCESS_FINE_LOCATION|Allows backend to monitor position reports from the GPS.
 
 
