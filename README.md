@@ -36,7 +36,7 @@ Note: The microG configuration check requires a location from a location backend
 
 Collecting RF Emitter Data
 ======================
-To conserve power the collection process does not actually turn on the GPS. If some other app turns on the app, for example a map or navigation app, then the backend will monitor the location and collect RF emitters data.
+To conserve power the collection process does not actually turn on the GPS. If some other app turns on the GPS, for example a map or navigation app, then the backend will monitor the location and collect RF emitter data.
 
 What is stored in the database
 ------------------------------
