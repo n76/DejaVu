@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 - Not applicable
 
+## [1.0.3]
+### Changed
+- Correct blacklist logic
+
 ## [1.0.2]
 ### Changed
 - Correct versionCode and versionName in gradle.build
