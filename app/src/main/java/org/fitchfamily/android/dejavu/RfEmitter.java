@@ -151,8 +151,6 @@ public class RfEmitter {
         note = "";
         resetAge();
         status = EmitterStatus.STATUS_UNKNOWN;
-        if (blacklistEmitter())
-            changeStatus(EmitterStatus.STATUS_BLACKLISTED, "initSelf()");
     }
 
     /**
@@ -234,7 +232,8 @@ public class RfEmitter {
     public void setNote(String n) {
         if (note != n) {
             note = n;
-            // TODO: If note changes to one that is blacklisted we should blacklist it.
+            if (blacklistEmitter())
+                changeStatus(EmitterStatus.STATUS_BLACKLISTED, "initSelf()");
         }
     }
 
@@ -302,6 +301,7 @@ public class RfEmitter {
                 if (coverage != null) {
                     db.drop(this);
                     coverage = null;
+                    Log.d(TAG, "sync('" + logString() + "') - Blacklisted dropping from database.");
                 }
                 break;
 
@@ -452,7 +452,7 @@ public class RfEmitter {
         }
 
         if (coverage == null) {
-            Log.d(TAG, "updateLocation("+id+") emitter is new.");
+            Log.d(TAG, "updateLocation("+logString()+") emitter is new.");
             coverage = new Coverage();
             coverage.latitude = gpsLoc.getLatitude();
             coverage.longitude = gpsLoc.getLongitude();
@@ -603,8 +603,7 @@ public class RfEmitter {
         // only obvious source would be other automobiles. So suspect that
         // this is the default setup for a number of vehicle manufactures.
         final String macSuffix = id.substring(id.length()-8).toLowerCase(Locale.US).replace(":", "");
-
-        return (
+        boolean rslt =
                 // Mobile phone brands
                 lc.contains("android") ||                   // mobile tethering
                 lc.contains("ipad") ||                      // mobile tethering
@@ -682,7 +681,10 @@ public class RfEmitter {
                 lc.contains("nsb_interakti")                // ???
 
                 // lc.endsWith("_nomap")                    // Google unsubscibe option
-        );
+        ;
+        //if (rslt)
+        //    Log.d(TAG, "blacklistWifi('" + logString() + "') blacklisted.");
+        return rslt;
     }
 
     /**
