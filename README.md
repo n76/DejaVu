@@ -8,6 +8,9 @@ The other part is the actual location provider which uses the database to estima
 
 This backend uses no network data. All data acquired by the phone stays on the phone.
 
+<a href="https://f-droid.org/packages/org.fitchfamily.android.dejavu/" target="_blank">
+<img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid" height="90"/></a>
+
 Yet Another Location Backend
 ============================
 This grew out of frustration with my earlier [mobile tower backend’s](https://github.com/n76/Local-GSM-Backend) two major faults:
@@ -116,5 +119,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-[![Get it on F-Droid](get_it_on_f-droid.png?raw=true)](https://f-droid.org/app/org.fitchfamily.android.dejavu)
