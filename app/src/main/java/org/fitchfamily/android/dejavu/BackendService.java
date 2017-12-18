@@ -71,6 +71,11 @@ public class BackendService extends LocationBackendService {
 
     public static final String LOCATION_PROVIDER = "DejaVu";
 
+    private static final
+            String[] myPerms = new String[]{
+            ACCESS_WIFI_STATE, CHANGE_WIFI_STATE,
+            ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION};
+
     public static final double DEG_TO_METER = 111225.0;
     public static final double METER_TO_DEG = 1.0 / DEG_TO_METER;
     public static final double MIN_COS = 0.01;      // for things that are dividing by the cosine
@@ -99,6 +104,8 @@ public class BackendService extends LocationBackendService {
 
     private static BackendService instance;
     private boolean gpsMonitorRunning = false;
+    private boolean wifiBroadcastReceiverRegistered = false;
+    private boolean permissionsOkay = true;
 
     // We use a threads for potentially slow operations.
     private Thread mobileThread;
@@ -198,12 +205,25 @@ public class BackendService extends LocationBackendService {
         nextMobileScanTime = 0;
         nextWlanScanTime = 0;
         lastMobileId = "";
+        wifiBroadcastReceiverRegistered = false;
 
         if (emitterCache == null)
             emitterCache = new Cache(this);
 
-        setgpsMonitorRunning(true);
-        this.registerReceiver(wifiBroadcastReceiver, wifiBroadcastFilter);
+        permissionsOkay = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Check our needed permissions, don't run unless we can.
+            for (String s : myPerms) {
+                permissionsOkay &= (checkSelfPermission(s) == PackageManager.PERMISSION_GRANTED);
+            }
+        }
+        if (permissionsOkay) {
+            setgpsMonitorRunning(true);
+            this.registerReceiver(wifiBroadcastReceiver, wifiBroadcastFilter);
+            wifiBroadcastReceiverRegistered = true;
+        } else {
+            Log.d(TAG, "onOpen() - Permissions not granted, soft fail.");
+        }
     }
 
     /**
@@ -213,7 +233,9 @@ public class BackendService extends LocationBackendService {
     protected void onClose() {
         super.onClose();
         Log.d(TAG, "onClose()");
-        this.unregisterReceiver(wifiBroadcastReceiver);
+        if (wifiBroadcastReceiverRegistered) {
+            this.unregisterReceiver(wifiBroadcastReceiver);
+        }
         setgpsMonitorRunning(false);
 
         if (emitterCache != null) {
@@ -236,11 +258,6 @@ public class BackendService extends LocationBackendService {
     @Override
     protected Intent getInitIntent() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // List of all needed permissions
-            String[] myPerms = new String[]{
-                    ACCESS_WIFI_STATE, CHANGE_WIFI_STATE,
-                    ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION};
-
             // Build list of permissions we need but have not been granted
             List<String> perms = new LinkedList<String>();
             for (String s : myPerms) {
@@ -269,7 +286,11 @@ public class BackendService extends LocationBackendService {
     @Override
     protected Location update() {
         //Log.d(TAG, "update() entry.");
-        scanAllSensors();
+        if (permissionsOkay) {
+            scanAllSensors();
+        } else {
+            Log.d(TAG, "update() - Permissions not granted, soft fail.");
+        }
         return null;
     }
 
@@ -302,13 +323,17 @@ public class BackendService extends LocationBackendService {
      */
     private void onGpsChanged(Location updt) {
         synchronized (this) {
-            //Log.d(TAG, "onGpsChanged() entry.");
-            if (gpsLocation == null)
-                gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
-            else
-                gpsLocation.update(updt);
+            if (permissionsOkay) {
+                //Log.d(TAG, "onGpsChanged() entry.");
+                if (gpsLocation == null)
+                    gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
+                else
+                    gpsLocation.update(updt);
 
-            scanAllSensors();
+                scanAllSensors();
+            } else {
+                Log.d(TAG, "onGpsChanged() - Permissions not granted, soft fail.");
+            }
         }
     }
 
