@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Correct blacklist logic
+- Not applicable.
 
 ### Removed
 - Not applicable
+
+## [1.0.4 - 2017-12-18]
+### Changed
+- Add more checks for permissions not granted to avoid locking up phone.
 
 ## [1.0.3]
 ### Changed
