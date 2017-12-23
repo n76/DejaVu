@@ -447,24 +447,41 @@ public class BackendService extends LocationBackendService {
                 if (inputCellInfo instanceof CellInfoLte) {
                     CellInfoLte info = (CellInfoLte) inputCellInfo;
                     CellIdentityLte id = info.getCellIdentity();
-                    String idStr = "LTE" + "/" + id.getMcc() + "/" +
-                            id.getMnc() + "/" + id.getCi() + "/" +
-                            id.getPci()+ "/" + id.getTac();
-                    int asu = (info.getCellSignalStrength().getAsuLevel() * MAXIMUM_ASU)/97;
 
-                    Observation o = new Observation(idStr, RfEmitter.EmitterType.MOBILE);
-                    o.setAsu(asu);
-                    observations.add(o);
+                    // CellIdentityLte accessors all state Integer.MAX_VALUE is returned for unknown values.
+                    if ((id.getMcc() != Integer.MAX_VALUE) && (id.getMnc() != Integer.MAX_VALUE) &&
+                        (id.getCi() != Integer.MAX_VALUE) && (id.getPci() != Integer.MAX_VALUE) &&
+                        (id.getTac() != Integer.MAX_VALUE)) {
+                        //Log.d(TAG, "getMobileTowers(): LTE tower: " + info.toString());
+                        String idStr = "LTE" + "/" + id.getMcc() + "/" +
+                                id.getMnc() + "/" + id.getCi() + "/" +
+                                id.getPci() + "/" + id.getTac();
+                        int asu = (info.getCellSignalStrength().getAsuLevel() * MAXIMUM_ASU) / 97;
+
+                        Observation o = new Observation(idStr, RfEmitter.EmitterType.MOBILE);
+                        o.setAsu(asu);
+                        observations.add(o);
+                    } else {
+                        // Log.d(TAG, "getMobileTowers(): LTE Cell Identity has unknown values: " + id.toString());
+                    }
                 } else if (inputCellInfo instanceof CellInfoGsm) {
                     CellInfoGsm info = (CellInfoGsm) inputCellInfo;
                     CellIdentityGsm id = info.getCellIdentity();
-                    String idStr = "GSM" + "/" + id.getMcc() + "/" +
-                            id.getMnc() + "/" + id.getLac() + "/" +
-                            id.getCid();
-                    int asu = info.getCellSignalStrength().getAsuLevel();
-                    Observation o = new Observation(idStr, RfEmitter.EmitterType.MOBILE);
-                    o.setAsu(asu);
-                    observations.add(o);
+
+                    // CellIdentityGsm accessors all state Integer.MAX_VALUE is returned for unknown values.
+                    if ((id.getMcc() != Integer.MAX_VALUE) && (id.getMnc() != Integer.MAX_VALUE) &&
+                        (id.getLac() != Integer.MAX_VALUE) && (id.getCid() != Integer.MAX_VALUE)) {
+                        //Log.d(TAG, "getMobileTowers(): GSM tower: " + info.toString());
+                        String idStr = "GSM" + "/" + id.getMcc() + "/" +
+                                id.getMnc() + "/" + id.getLac() + "/" +
+                                id.getCid();
+                        int asu = info.getCellSignalStrength().getAsuLevel();
+                        Observation o = new Observation(idStr, RfEmitter.EmitterType.MOBILE);
+                        o.setAsu(asu);
+                        observations.add(o);
+                    } else {
+                        // Log.d(TAG, "getMobileTowers(): GSM Cell Identity has unknown values: " + id.toString());
+                    }
                 }
             }
         } else {

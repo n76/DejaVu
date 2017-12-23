@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Not applicable.
+- Check for unknown values in fields in the cell IDs returned by getAllCellInfo();
 
 ### Removed
 - Not applicable
