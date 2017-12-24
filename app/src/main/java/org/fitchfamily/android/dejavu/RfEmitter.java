@@ -409,8 +409,10 @@ public class RfEmitter {
         if (canUpdate()) {
             long oldTrust = trust;
             trust -= ourCharacteristics.decrTrust;
-            // Log.d(TAG, "decrementTrust('" + logString() + "') - trust change: " + oldTrust + "->" + trust);
-            changeStatus(EmitterStatus.STATUS_CHANGED, "decrementTrust('"+logString()+"')");
+            if (oldTrust != trust) {
+                // Log.d(TAG, "decrementTrust('" + logString() + "') - trust change: " + oldTrust + "->" + trust);
+                changeStatus(EmitterStatus.STATUS_CHANGED, "decrementTrust('" + logString() + "')");
+            }
         }
     }
 
@@ -448,6 +450,7 @@ public class RfEmitter {
             return;
 
         if ((gpsLoc == null) || (gpsLoc.getAccuracy() > ourCharacteristics.reqdGpsAccuracy)) {
+            // Log.d(TAG, "updateLocation("+logString()+") No GPS location or location inaccurate.");
             return;
         }
 
