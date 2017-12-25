@@ -6,13 +6,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
+- Not applicable
+
+### Changed
+- Not applicable
+
+### Removed
+- Not applicable
+
+## [1.0.5 - 2017-12-24]
+### Added
 - Partial support for CDMA and WCDMA towers when using getAllCellInfo() API.
 
 ### Changed
 - Check for unknown values in fields in the cell IDs returned by getAllCellInfo();
-
-### Removed
-- Not applicable
 
 ## [1.0.4 - 2017-12-18]
 ### Changed
