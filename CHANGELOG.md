@@ -6,13 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- French translation. Thanks to @Massedil.
+- Not applicable
 
 ### Changed
 - Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.0.6 - 2017-12-28]
+### Added
+- French translation. Thanks to @Massedil.
 
 ## [1.0.5 - 2017-12-24]
 ### Added
