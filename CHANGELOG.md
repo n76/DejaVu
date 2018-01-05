@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Avoid crash on start up if database is not available when first RF emitter is processed.
+- Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.0.7 - 2018.01.05]
+### Changed
+- Avoid crash on start up if database is not available when first RF emitter is processed.
 
 ## [1.0.6 - 2017-12-28]
 ### Added
