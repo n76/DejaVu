@@ -35,6 +35,9 @@ import java.util.Locale;
  * signal level, an estimate of its coverage (center point and radius), how much we trust
  * the emitter (can we use information about it to compute a position), etc.
  *
+ * Starting with v2 of the database, we store a north-south radius and an east-west radius which
+ * allows for a rectangular bounding box rather than a square one.
+ *
  * When an RF emitter is first observed we create a new object and, if information exists in
  * the database, populate it from saved information.
  *
@@ -73,7 +76,8 @@ public class RfEmitter {
     public class Coverage {
         public double latitude;
         public double longitude;
-        public float radius;
+        public float radius_ns;
+        public float radius_ew;
     }
 
     public static class RfCharacteristics {
@@ -216,7 +220,20 @@ public class RfEmitter {
 
     public double getRadius() {
         if (coverage != null)
-            return coverage.radius;
+            return Math.sqrt(coverage.radius_ns*coverage.radius_ns + coverage.radius_ew*coverage.radius_ew);
+        return 0.0;
+    }
+
+
+    public double getRadiusNS() {
+        if (coverage != null)
+            return coverage.radius_ns;
+        return 0.0;
+    }
+
+    public double getRadiusEW() {
+        if (coverage != null)
+            return coverage.radius_ew;
         return 0.0;
     }
 
@@ -431,7 +448,8 @@ public class RfEmitter {
             //Log.d(TAG,"updateInfo() - Setting info for '"+id+"'");
             coverage.latitude = emitterInfo.latitude;
             coverage.longitude = emitterInfo.longitude;
-            coverage.radius = emitterInfo.radius;
+            coverage.radius_ns = emitterInfo.radius_ns;
+            coverage.radius_ew = emitterInfo.radius_ew;
             trust = emitterInfo.trust;
             note = emitterInfo.note;
             changeStatus(EmitterStatus.STATUS_CACHED, "updateInfo('"+logString()+"')");
@@ -459,7 +477,8 @@ public class RfEmitter {
             coverage = new Coverage();
             coverage.latitude = gpsLoc.getLatitude();
             coverage.longitude = gpsLoc.getLongitude();
-            coverage.radius = 0.0f;
+            coverage.radius_ns = 0.0f;
+            coverage.radius_ew = 0.0f;
             changeStatus(EmitterStatus.STATUS_NEW, "updateLocation('"+logString()+"')");
             return;
         }
@@ -470,7 +489,8 @@ public class RfEmitter {
             Log.d(TAG, "updateLocation("+id+") emitter has moved (" + gpsLoc.distanceTo(_getLocation()) + ")");
             coverage.latitude = gpsLoc.getLatitude();
             coverage.longitude = gpsLoc.getLongitude();
-            coverage.radius = 0.0f;
+            coverage.radius_ns = 0.0f;
+            coverage.radius_ew = 0.0f;
             trust = ourCharacteristics.discoveryTrust;
             changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
             return;
@@ -478,14 +498,12 @@ public class RfEmitter {
 
         //
         // See if the bounding box has increased.
+        //
 
         boolean changed = false;
-        if (sampleDistance > coverage.radius) {
-            double north = coverage.latitude + (coverage.radius * BackendService.METER_TO_DEG);
-            double south = coverage.latitude - (coverage.radius * BackendService.METER_TO_DEG);
-            double cosLat = Math.cos(Math.toRadians(coverage.latitude));
-            double east = coverage.longitude + (coverage.radius * BackendService.METER_TO_DEG) * cosLat;
-            double west = coverage.longitude - (coverage.radius * BackendService.METER_TO_DEG) * cosLat;
+        if (sampleDistance > this.getRadius()) {
+            double north = coverage.latitude + (coverage.radius_ns * BackendService.METER_TO_DEG);
+            double south = coverage.latitude - (coverage.radius_ns * BackendService.METER_TO_DEG);
 
             if (gpsLoc.getLatitude() > north) {
                 north = gpsLoc.getLatitude();
@@ -495,6 +513,11 @@ public class RfEmitter {
                 south = gpsLoc.getLatitude();
                 changed = true;
             }
+
+            double cosLat = Math.cos(Math.toRadians(coverage.latitude));
+            double east = coverage.longitude + (coverage.radius_ew * BackendService.METER_TO_DEG) * cosLat;
+            double west = coverage.longitude - (coverage.radius_ew * BackendService.METER_TO_DEG) * cosLat;
+
             if (gpsLoc.getLongitude() > east) {
                 east = gpsLoc.getLongitude();
                 changed = true;
@@ -507,19 +530,16 @@ public class RfEmitter {
                 changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
                 coverage.latitude = (north + south)/2.0;
                 coverage.longitude = (east + west)/2.0;
-                coverage.radius = (float)((north - coverage.latitude) * BackendService.DEG_TO_METER);
+                coverage.radius_ns = (float)((north - coverage.latitude) * BackendService.DEG_TO_METER);
                 cosLat = Math.max(Math.cos(Math.toRadians(coverage.latitude)),BackendService.MIN_COS);
-                float ewRadius = (float)(((east - coverage.longitude) * BackendService.DEG_TO_METER) / cosLat);
-                coverage.radius = Math.max(coverage.radius, ewRadius);
+                coverage.radius_ew = (float)(((east - coverage.longitude) * BackendService.DEG_TO_METER) / cosLat);
             }
         }
     }
 
     /**
      * User facing location value. Differs from internal one in that we don't report
-     * locations that are guarded due to being new or moved. And we work internally
-     * with radius values that fit within a bounding box but we report a radius that
-     * extends to the corners of the bounding box.
+     * locations that are guarded due to being new or moved.
      *
      * @return The coverage estimate for our RF emitter or null if we don't trust our
      * information.
@@ -530,11 +550,6 @@ public class RfEmitter {
         Location boundaryBoxSized = _getLocation();
         if (boundaryBoxSized == null)
             return null;
-
-        // Our radius is sized to fit be tangent to the sides of the
-        // bounding box. But we really ought to cover the corners of
-        // the box, so multiply by the square root of 2 to convert.
-        boundaryBoxSized.setAccuracy((boundaryBoxSized.getAccuracy() * 1.41421356f));
         return boundaryBoxSized;
     }
 
@@ -564,7 +579,7 @@ public class RfEmitter {
 
         float scale = BackendService.MAXIMUM_ASU - asu + BackendService.MINIMUM_ASU;
         scale = scale / BackendService.MAXIMUM_ASU;
-        float accuracy = coverage.radius * scale;
+        float accuracy = (float)(this.getRadius() * scale);
 
         // Hard limit the minimum accuracy based on the type of emitter
         location.setAccuracy(Math.max(accuracy,ourCharacteristics.minimumRange));

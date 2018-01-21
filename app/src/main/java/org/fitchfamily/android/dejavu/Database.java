@@ -40,18 +40,20 @@ import java.util.HashSet;
 public class Database extends SQLiteOpenHelper {
     private static final String TAG = "DejaVu DB";
 
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final String NAME = "rf.db";
 
-    public static final String TABLE_SAMPLES = "emitters";
+    private static final String TABLE_SAMPLES = "emitters";
 
-    public static final String COL_TYPE = "rfType";
-    public static final String COL_RFID = "rfID";
-    public static final String COL_TRUST = "trust";
-    public static final String COL_LAT = "latitude";
-    public static final String COL_LON = "longitude";
-    public static final String COL_RAD = "radius";
-    public static final String COL_NOTE = "note";
+    private static final String COL_TYPE = "rfType";
+    private static final String COL_RFID = "rfID";
+    private static final String COL_TRUST = "trust";
+    private static final String COL_LAT = "latitude";
+    private static final String COL_LON = "longitude";
+    private static final String COL_RAD = "radius";          // v1 of database
+    private static final String COL_RAD_NS = "radius_ns";    // v2 of database
+    private static final String COL_RAD_EW= "radius_ew";     // v2 of database
+    private static final String COL_NOTE = "note";
 
     private SQLiteDatabase database;
     private boolean withinTransaction;
@@ -64,7 +66,8 @@ public class Database extends SQLiteOpenHelper {
     public class EmitterInfo {
         public double latitude;
         public double longitude;
-        public float radius;
+        public float radius_ns;
+        public float radius_ew;
         public long trust;
         public String note;
     }
@@ -95,7 +98,43 @@ public class Database extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // no old versions (yet)
+        if (oldVersion < 2) { // upgrade to 2
+            Log.d(TAG, "onUpgrade(): From: "+ oldVersion + " to 2");
+            // Sqlite3 does not support dropping columns so we create a new table with our
+            // current fields and copy the old data into it.
+            db.execSQL("BEGIN TRANSACTION;");
+            db.execSQL("ALTER TABLE " + TABLE_SAMPLES + " RENAME TO " + TABLE_SAMPLES + "_old;");
+            db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_SAMPLES + "(" +
+                    COL_RFID + " STRING PRIMARY KEY, " +
+                    COL_TYPE + " STRING, " +
+                    COL_TRUST + " INTEGER, " +
+                    COL_LAT + " REAL, " +
+                    COL_LON + " REAL, " +
+                    COL_RAD_NS + " REAL, " +
+                    COL_RAD_EW + " REAL, " +
+                    COL_NOTE + " STRING);");
+
+            db.execSQL("INSERT INTO " + TABLE_SAMPLES + "(" +
+                    COL_RFID + ", " +
+                    COL_TYPE + ", " +
+                    COL_TRUST + ", " +
+                    COL_LAT + ", " +
+                    COL_LON + ", " +
+                    COL_RAD_NS + ", " +
+                    COL_NOTE +
+                    ") SELECT " +
+                    COL_RFID + ", " +
+                    COL_TYPE + ", " +
+                    COL_TRUST + ", " +
+                    COL_LAT + ", " +
+                    COL_LON + ", " +
+                    COL_RAD + ", " +
+                    COL_NOTE +
+                    " FROM " + TABLE_SAMPLES + "_old;");
+            db.execSQL("DROP TABLE " + TABLE_SAMPLES + "_old;");
+            db.execSQL("UPDATE " + TABLE_SAMPLES + " SET " + COL_RAD_EW + "=0.0;");
+            db.execSQL("COMMIT;");
+        }
     }
 
     @Override
@@ -128,16 +167,18 @@ public class Database extends SQLiteOpenHelper {
                 COL_TRUST + ", " +
                 COL_LAT + ", " +
                 COL_LON + ", " +
-                COL_RAD + ", " +
+                COL_RAD_NS + ", " +
+                COL_RAD_EW + ", " +
                 COL_NOTE + ") " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?);");
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?);");
 
         sqlSampleUpdate = database.compileStatement("UPDATE " +
                 TABLE_SAMPLES + " SET "+
                 COL_TRUST + "=?, " +
                 COL_LAT + "=?, " +
                 COL_LON + "=?, " +
-                COL_RAD + "=?, " +
+                COL_RAD_NS + "=?, " +
+                COL_RAD_EW + "=?, " +
                 COL_NOTE + "=? " +
                 "WHERE " + COL_RFID + "=? AND " + COL_TYPE + "=?;");
 
@@ -195,8 +236,9 @@ public class Database extends SQLiteOpenHelper {
         sqlSampleInsert.bindString(3, String.valueOf(emitter.getTrust()));
         sqlSampleInsert.bindString(4, String.valueOf(emitter.getLat()));
         sqlSampleInsert.bindString(5, String.valueOf(emitter.getLon()));
-        sqlSampleInsert.bindString(6, String.valueOf(emitter.getRadius()));
-        sqlSampleInsert.bindString(7, emitter.getNote());
+        sqlSampleInsert.bindString(6, String.valueOf(emitter.getRadiusNS()));
+        sqlSampleInsert.bindString(7, String.valueOf(emitter.getRadiusEW()));
+        sqlSampleInsert.bindString(8, emitter.getNote());
 
         sqlSampleInsert.executeInsert();
         sqlSampleInsert.clearBindings();
@@ -214,12 +256,13 @@ public class Database extends SQLiteOpenHelper {
         sqlSampleUpdate.bindString(1, String.valueOf(emitter.getTrust()));
         sqlSampleUpdate.bindString(2, String.valueOf(emitter.getLat()));
         sqlSampleUpdate.bindString(3, String.valueOf(emitter.getLon()));
-        sqlSampleUpdate.bindString(4, String.valueOf(emitter.getRadius()));
-        sqlSampleUpdate.bindString(5, emitter.getNote());
+        sqlSampleUpdate.bindString(4, String.valueOf(emitter.getRadiusNS()));
+        sqlSampleUpdate.bindString(5, String.valueOf(emitter.getRadiusEW()));
+        sqlSampleUpdate.bindString(6, emitter.getNote());
 
         // the Where fields
-        sqlSampleUpdate.bindString(6, emitter.getId());
-        sqlSampleUpdate.bindString(7, String.valueOf(emitter.getType()));
+        sqlSampleUpdate.bindString(7, emitter.getId());
+        sqlSampleUpdate.bindString(8, String.valueOf(emitter.getType()));
         sqlSampleUpdate.executeInsert();
         sqlSampleUpdate.clearBindings();
         updatesMade = true;
@@ -273,7 +316,8 @@ public class Database extends SQLiteOpenHelper {
                 COL_TRUST + ", " +
                 COL_LAT + ", " +
                 COL_LON + ", " +
-                COL_RAD + ", " +
+                COL_RAD_NS+ ", " +
+                COL_RAD_EW+ ", " +
                 COL_NOTE + " " +
                 " FROM " + TABLE_SAMPLES +
                 " WHERE " + COL_TYPE + "='" + ident.getRfType() +
@@ -288,8 +332,9 @@ public class Database extends SQLiteOpenHelper {
                 ei.trust = (int) cursor.getLong(1);
                 ei.latitude = (double) cursor.getDouble(2);
                 ei.longitude = (double) cursor.getDouble(3);
-                ei.radius = (float) cursor.getDouble(4);
-                ei.note = cursor.getString(5);
+                ei.radius_ns = (float) cursor.getDouble(4);
+                ei.radius_ew = (float) cursor.getDouble(5);
+                ei.note = cursor.getString(6);
                 if (ei.note == null)
                     ei.note = "";
                 rslt.updateInfo(ei);
