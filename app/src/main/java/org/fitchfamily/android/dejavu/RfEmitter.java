@@ -73,13 +73,6 @@ public class RfEmitter {
         STATUS_BLACKLISTED          // Has been blacklisted
     };
 
-    public class Coverage {
-        public double latitude;
-        public double longitude;
-        public float radius_ns;
-        public float radius_ew;
-    }
-
     public static class RfCharacteristics {
         public float reqdGpsAccuracy;       // GPS accuracy needed in meters
         public float minimumRange;          // Minimum believable coverage radius in meters
@@ -115,7 +108,7 @@ public class RfEmitter {
     private String id;
     private int asu;
     private long trust;
-    private Coverage coverage;
+    private BoundingBox coverage;
     private String note;
 
     private int ageSinceLastUse;        // Count of periods since last used (for caching purposes)
@@ -208,32 +201,32 @@ public class RfEmitter {
 
     public double getLat() {
         if (coverage != null)
-            return coverage.latitude;
+            return coverage.getCenter_lat();
         return 0.0;
     }
 
     public double getLon() {
         if (coverage != null)
-            return coverage.longitude;
+            return coverage.getCenter_lon();
         return 0.0;
     }
 
     public double getRadius() {
         if (coverage != null)
-            return Math.sqrt(coverage.radius_ns*coverage.radius_ns + coverage.radius_ew*coverage.radius_ew);
+            return coverage.getRadius();
         return 0.0;
     }
 
 
     public double getRadiusNS() {
         if (coverage != null)
-            return coverage.radius_ns;
+            return coverage.getRadius_ns();
         return 0.0;
     }
 
     public double getRadiusEW() {
         if (coverage != null)
-            return coverage.radius_ew;
+            return coverage.getRadius_ew();
         return 0.0;
     }
 
@@ -444,12 +437,8 @@ public class RfEmitter {
     public void updateInfo(Database.EmitterInfo emitterInfo) {
         if (emitterInfo != null) {
             if (coverage == null)
-                coverage = new Coverage();
+                coverage = new BoundingBox(emitterInfo);
             //Log.d(TAG,"updateInfo() - Setting info for '"+id+"'");
-            coverage.latitude = emitterInfo.latitude;
-            coverage.longitude = emitterInfo.longitude;
-            coverage.radius_ns = emitterInfo.radius_ns;
-            coverage.radius_ew = emitterInfo.radius_ew;
             trust = emitterInfo.trust;
             note = emitterInfo.note;
             changeStatus(EmitterStatus.STATUS_CACHED, "updateInfo('"+logString()+"')");
@@ -474,12 +463,8 @@ public class RfEmitter {
 
         if (coverage == null) {
             Log.d(TAG, "updateLocation("+logString()+") emitter is new.");
-            coverage = new Coverage();
-            coverage.latitude = gpsLoc.getLatitude();
-            coverage.longitude = gpsLoc.getLongitude();
-            coverage.radius_ns = 0.0f;
-            coverage.radius_ew = 0.0f;
-            changeStatus(EmitterStatus.STATUS_NEW, "updateLocation('"+logString()+"')");
+            coverage = new BoundingBox(gpsLoc.getLatitude(), gpsLoc.getLongitude(), 0.0f);
+            changeStatus(EmitterStatus.STATUS_NEW, "updateLocation('"+logString()+"') New");
             return;
         }
 
@@ -487,12 +472,9 @@ public class RfEmitter {
         float sampleDistance = gpsLoc.distanceTo(_getLocation());
         if (sampleDistance >= ourCharacteristics.moveDetectDistance) {
             Log.d(TAG, "updateLocation("+id+") emitter has moved (" + gpsLoc.distanceTo(_getLocation()) + ")");
-            coverage.latitude = gpsLoc.getLatitude();
-            coverage.longitude = gpsLoc.getLongitude();
-            coverage.radius_ns = 0.0f;
-            coverage.radius_ew = 0.0f;
+            coverage = new BoundingBox(gpsLoc.getLatitude(), gpsLoc.getLongitude(), 0.0f);
             trust = ourCharacteristics.discoveryTrust;
-            changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
+            changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"') Moved");
             return;
         }
 
@@ -500,39 +482,9 @@ public class RfEmitter {
         // See if the bounding box has increased.
         //
 
-        boolean changed = false;
-        if (sampleDistance > this.getRadius()) {
-            double north = coverage.latitude + (coverage.radius_ns * BackendService.METER_TO_DEG);
-            double south = coverage.latitude - (coverage.radius_ns * BackendService.METER_TO_DEG);
-
-            if (gpsLoc.getLatitude() > north) {
-                north = gpsLoc.getLatitude();
-                changed = true;
-            }
-            if (gpsLoc.getLatitude() < south) {
-                south = gpsLoc.getLatitude();
-                changed = true;
-            }
-
-            double cosLat = Math.cos(Math.toRadians(coverage.latitude));
-            double east = coverage.longitude + (coverage.radius_ew * BackendService.METER_TO_DEG) * cosLat;
-            double west = coverage.longitude - (coverage.radius_ew * BackendService.METER_TO_DEG) * cosLat;
-
-            if (gpsLoc.getLongitude() > east) {
-                east = gpsLoc.getLongitude();
-                changed = true;
-            }
-            if (gpsLoc.getLongitude() < west) {
-                west = gpsLoc.getLongitude();
-                changed = true;
-            }
-            if (changed) {
-                changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"')");
-                coverage.latitude = (north + south)/2.0;
-                coverage.longitude = (east + west)/2.0;
-                coverage.radius_ns = (float)((north - coverage.latitude) * BackendService.DEG_TO_METER);
-                cosLat = Math.max(Math.cos(Math.toRadians(coverage.latitude)),BackendService.MIN_COS);
-                coverage.radius_ew = (float)(((east - coverage.longitude) * BackendService.DEG_TO_METER) / cosLat);
+        if (sampleDistance > coverage.getRadius()) {
+            if (coverage.update(gpsLoc.getLatitude(), gpsLoc.getLongitude())) {
+                changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"') BBOX update");
             }
         }
     }
@@ -570,8 +522,8 @@ public class RfEmitter {
         location.setTime(timeMs);
         if (Build.VERSION.SDK_INT >= 17)
             location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
-        location.setLatitude(coverage.latitude);
-        location.setLongitude(coverage.longitude);
+        location.setLatitude(coverage.getCenter_lat());
+        location.setLongitude(coverage.getCenter_lon());
 
         // At this point, accuracy is the maximum coverage area. Scale it based on
         // the ASU as we assume we are closer to the center of the coverage if we

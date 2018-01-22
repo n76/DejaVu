@@ -30,6 +30,11 @@ public class BoundingBox {
     private double south;
     private double east;
     private double west;
+    private double center_lat;
+    private double center_lon;
+    private double radius;
+    private double radius_ns;
+    private double radius_ew;
 
     BoundingBox() {
         reset();
@@ -45,13 +50,18 @@ public class BoundingBox {
         update(lat, lon, radius);
     }
 
+    BoundingBox(Database.EmitterInfo info) {
+        reset();
+        update(info.latitude, info.longitude, info.radius_ns, info.radius_ew);
+    }
+
     /**
      * Expand, if needed, the bounding box to include the coverage area
      * implied by a location.
      * @param loc A record describing the coverage of an RF emitter.
      */
-    public void update(Location loc) {
-        update(loc.getLatitude(), loc.getLongitude(), loc.getAccuracy());
+    public boolean update(Location loc) {
+        return update(loc.getLatitude(), loc.getLongitude(), loc.getAccuracy());
     }
 
     /**
@@ -62,17 +72,27 @@ public class BoundingBox {
      * @param lon The center longitude for the coverage area.
      * @param radius The radius of the coverage area.
      */
-    public void update(double lat, double lon, float radius) {
-        double locNorth = lat + (radius * BackendService.METER_TO_DEG);
-        double locSouth = lat - (radius * BackendService.METER_TO_DEG);
-        double cosLat = Math.cos(Math.toRadians(lat));
-        double locEast = lon + (radius * BackendService.METER_TO_DEG) * cosLat;
-        double locWest = lon - (radius * BackendService.METER_TO_DEG) * cosLat;
+    public boolean update(double lat, double lon, float radius) {
+        return update(lat, lon, radius, radius);
+    }
 
-        north = Math.max(north,locNorth);
-        south = Math.min(south,locSouth);
-        east = Math.max(east,locEast);
-        west = Math.min(west,locWest);
+    /**
+     * Expand bounding box to include an emitter at a lat/lon with a
+     * specified radius.
+     *
+     * @param lat The center latitude for the coverage area.
+     * @param lon The center longitude for the coverage area.
+     * @param radius_ns The distance from the center to the north (or south) edge.
+     * @param radius_ew The distance from the center to the east (or west) edge.
+     */
+    public boolean update(double lat, double lon, float radius_ns, float radius_ew) {
+        double locNorth = lat + (radius_ns * BackendService.METER_TO_DEG);
+        double locSouth = lat - (radius_ns * BackendService.METER_TO_DEG);
+        double cosLat = Math.cos(Math.toRadians(lat));
+        double locEast = lon + (radius_ew * BackendService.METER_TO_DEG) * cosLat;
+        double locWest = lon - (radius_ew * BackendService.METER_TO_DEG) * cosLat;
+
+        return update(locNorth, locWest) || update(locSouth, locEast);
     }
 
     /**
@@ -80,11 +100,38 @@ public class BoundingBox {
      * @param lat The latitude to be included in the bounding box
      * @param lon The longitude to be included in the bounding box
      */
-    public void update(double lat, double lon) {
-        north = Math.max(north,lat);
-        south = Math.min(south,lat);
-        east = Math.max(east,lon);
-        west = Math.min(west,lon);
+    public boolean update(double lat, double lon) {
+        boolean rslt = false;
+
+        if (lat > north) {
+            north = lat;
+            rslt = true;
+        }
+        if (lat < south) {
+            south = lat;
+            rslt = true;
+        }
+        if (lon > east) {
+            east = lon;
+            rslt = true;
+        }
+        if (lon < west) {
+            west = lon;
+            rslt = true;
+        }
+
+        if (rslt) {
+            center_lat = (north + south)/2.0;
+            center_lon = (east + west)/2.0;
+
+            radius_ns = (float)((north - center_lat) * BackendService.DEG_TO_METER);
+            double cosLat = Math.max(Math.cos(Math.toRadians(center_lat)),BackendService.MIN_COS);
+            radius_ew = (float)(((east - center_lon) * BackendService.DEG_TO_METER) / cosLat);
+
+            radius = Math.sqrt(radius_ns*radius_ns + radius_ew*radius_ew);
+        }
+
+        return rslt;
     }
 
     public double getNorth() {
@@ -103,6 +150,16 @@ public class BoundingBox {
         return west;
     }
 
+    public double getCenter_lat() { return center_lat; }
+
+    public double getCenter_lon() { return center_lon; }
+
+    public double getRadius() { return radius; }
+
+    public double getRadius_ns() { return radius_ns; }
+
+    public double getRadius_ew() { return radius_ew; }
+
     @Override
     public String toString() {
         return "(" + north + "," + south + "," + east + "," + west + ")";
@@ -113,6 +170,11 @@ public class BoundingBox {
         south = 91.0;       // Impossibly north
         east = -181.0;      // Impossibly west
         west = 181.0;       // Impossibly east
+        center_lat = 0.0;   // Center at "null island"
+        center_lon = 0.0;
+        radius = 0.0;       // No coverage radius
+        radius_ns = 0.0;
+        radius_ew = 0.0;
     }
 
 }
