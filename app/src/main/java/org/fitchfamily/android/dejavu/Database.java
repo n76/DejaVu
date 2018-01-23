@@ -121,6 +121,7 @@ public class Database extends SQLiteOpenHelper {
                     COL_LAT + ", " +
                     COL_LON + ", " +
                     COL_RAD_NS + ", " +
+                    COL_RAD_EW + ", " +
                     COL_NOTE +
                     ") SELECT " +
                     COL_RFID + ", " +
@@ -129,10 +130,10 @@ public class Database extends SQLiteOpenHelper {
                     COL_LAT + ", " +
                     COL_LON + ", " +
                     COL_RAD + ", " +
+                    COL_RAD + ", " +
                     COL_NOTE +
                     " FROM " + TABLE_SAMPLES + "_old;");
             db.execSQL("DROP TABLE " + TABLE_SAMPLES + "_old;");
-            db.execSQL("UPDATE " + TABLE_SAMPLES + " SET " + COL_RAD_EW + "=0.0;");
             db.execSQL("COMMIT;");
         }
     }
