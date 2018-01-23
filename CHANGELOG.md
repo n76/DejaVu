@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Not applicable
+- Refactor RF emitter and database logic to allow for non-square coverage bounding boxes. Should result in more precise coverage mapping and thus better location estimation. Database file schema changed.
 
 ### Removed
 - Not applicable
