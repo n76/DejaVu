@@ -468,23 +468,17 @@ public class RfEmitter {
             return;
         }
 
-        // If the emitter has moved, reset our data on it.
-        float sampleDistance = gpsLoc.distanceTo(_getLocation());
-        if (sampleDistance >= ourCharacteristics.moveDetectDistance) {
-            Log.d(TAG, "updateLocation("+id+") emitter has moved (" + gpsLoc.distanceTo(_getLocation()) + ")");
-            coverage = new BoundingBox(gpsLoc.getLatitude(), gpsLoc.getLongitude(), 0.0f);
-            trust = ourCharacteristics.discoveryTrust;
-            changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"') Moved");
-            return;
-        }
+        // Add the GPS sample to the known bounding box of the emitter.
 
-        //
-        // See if the bounding box has increased.
-        //
-
-        if (sampleDistance > coverage.getRadius()) {
-            if (coverage.update(gpsLoc.getLatitude(), gpsLoc.getLongitude())) {
-                changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"') BBOX update");
+        if (coverage.update(gpsLoc.getLatitude(), gpsLoc.getLongitude())) {
+            // Bounding box has increased, see if it is now unbelievably large
+            if (coverage.getRadius() >= ourCharacteristics.moveDetectDistance) {
+                Log.d(TAG, "updateLocation("+id+") emitter has moved (" + gpsLoc.distanceTo(_getLocation()) + ")");
+                coverage = new BoundingBox(gpsLoc.getLatitude(), gpsLoc.getLongitude(), 0.0f);
+                trust = ourCharacteristics.discoveryTrust;
+                changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('"+logString()+"') Moved");
+            } else {
+                changeStatus(EmitterStatus.STATUS_CHANGED, "updateLocation('" + logString() + "') BBOX update");
             }
         }
     }
