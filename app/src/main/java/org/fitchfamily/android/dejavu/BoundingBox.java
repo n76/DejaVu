@@ -92,7 +92,13 @@ public class BoundingBox {
         double locEast = lon + (radius_ew * BackendService.METER_TO_DEG) * cosLat;
         double locWest = lon - (radius_ew * BackendService.METER_TO_DEG) * cosLat;
 
-        return update(locNorth, locWest) || update(locSouth, locEast);
+        // Can't just "update(locNorth, locWest) || update(locSouth, locEast)"
+        // because we need the second update to be called even if the first
+        // returns true.
+        boolean rslt = update(locNorth, locWest);
+        if (update(locSouth, locEast))
+            rslt = true;
+        return rslt;
     }
 
     /**
@@ -162,7 +168,7 @@ public class BoundingBox {
 
     @Override
     public String toString() {
-        return "(" + north + "," + west + "," + south + "," + east + "," + center_lat + "," + center_lon + "," + radius + ")";
+        return "(" + north + "," + west + "," + south + "," + east + "," + center_lat + "," + center_lon + "," + radius_ns+ "," + radius_ew+ "," + radius + ")";
     }
 
     private void reset() {
