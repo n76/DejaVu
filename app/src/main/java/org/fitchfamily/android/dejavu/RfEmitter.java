@@ -69,7 +69,7 @@ public class RfEmitter {
     public static final String LOC_RF_TYPE = "rftype";
     public static final String LOC_ASU = "asu";
 
-    public enum EmitterType {WLAN, MOBILE}
+    public enum EmitterType {WLAN, MOBILE, INVALID}
 
     public enum EmitterStatus {
         STATUS_UNKNOWN,             // Newly discovered emitter, no data for it at all
@@ -193,6 +193,14 @@ public class RfEmitter {
         return type.toString();
     }
 
+    public static EmitterType typeOf( String typeStr ) {
+        if (typeStr.equals(EmitterType.MOBILE.toString()))
+            return EmitterType.MOBILE;
+        if (typeStr.equals(EmitterType.WLAN.toString()))
+            return EmitterType.WLAN;
+        return EmitterType.INVALID;
+    }
+
     public String getId() {
         return id;
     }
@@ -222,7 +230,6 @@ public class RfEmitter {
             return coverage.getRadius();
         return 0.0;
     }
-
 
     public double getRadiusNS() {
         if (coverage != null)

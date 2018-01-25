@@ -141,6 +141,7 @@ public class BackendService extends LocationBackendService {
     //
     Set<RfIdentification> seenSet;
     Set<RfIdentification> expectedSet;
+    Set<RfIdentification> usedSet;
     Cache emitterCache;
 
     //
@@ -158,11 +159,6 @@ public class BackendService extends LocationBackendService {
     private long nextMobileScanTime;
     private long nextWlanScanTime;
     private long nextReportTime;
-
-    // If we see only a single mobile tower multiple times then our variance will be zero.
-    // While mathematically true, it doesn't really give a good feel for the uncertainty in
-    // our position. Guard against that by blocking the use of a single mobile tower.
-    private String lastMobileId = "";
 
     //
     // We want only a single background thread to do all the work but we have a couple
@@ -205,7 +201,6 @@ public class BackendService extends LocationBackendService {
         nextReportTime = 0;
         nextMobileScanTime = 0;
         nextWlanScanTime = 0;
-        lastMobileId = "";
         wifiBroadcastReceiverRegistered = false;
 
         if (emitterCache == null)
@@ -709,6 +704,8 @@ public class BackendService extends LocationBackendService {
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
+        if (usedSet == null)
+            usedSet = new HashSet<RfIdentification>();
 
         Collection<RfEmitter> emitters = new HashSet<>();
 
@@ -768,23 +765,6 @@ public class BackendService extends LocationBackendService {
 
             case MOBILE:
                 //Log.d(TAG, "Mobile towers seen: " + locations.toString());
-
-                // If our observations only contain one tower, and that is the tower
-                // we've already seen this reporting period then avoid using it again.
-                int count = 0;
-                String rfIdent = "";
-                for (Observation o : myWork.observations)  {
-                    count++;
-                    rfIdent = o.getIdent().getRfId();
-                }
-                if (count == 1) {
-                    if (lastMobileId.contentEquals(rfIdent))
-                        break;
-                    lastMobileId = rfIdent;
-                } else {
-                    lastMobileId = "";
-                }
-                //Log.d(TAG, "Mobile towers used: " + locations.toString());
                 computePostion(locations, myWork);
                 break;
         }
@@ -825,6 +805,9 @@ public class BackendService extends LocationBackendService {
      * Compute our current location using a weighted average algorithm. We also keep
      * track of the types of emitters we have seen for the end of period processing.
      *
+     * For any given reporting interval, we will only use an emitter once, so we keep
+     * a set of used emitters.
+     *
      * @param locations The set of coverage information for the current observations
      * @param myWork All the information about the current work item.
      */
@@ -840,7 +823,13 @@ public class BackendService extends LocationBackendService {
             weightedAverageLocation = new WeightedAverage();
 
         for (Location l : locations) {
-            weightedAverageLocation.add(l);
+            String rftype_str = l.getExtras().getString(RfEmitter.LOC_RF_TYPE);
+            String rfid_str = l.getExtras().getString(RfEmitter.LOC_RF_ID);
+            RfIdentification rfIdentification = new RfIdentification(rfid_str, RfEmitter.typeOf(rftype_str));
+            if (!usedSet.contains(rfIdentification)) {
+                weightedAverageLocation.add(l);
+            }
+            usedSet.add(rfIdentification);
         }
     }
 
@@ -965,7 +954,8 @@ public class BackendService extends LocationBackendService {
             seenSet = new HashSet<RfIdentification>();
         if (expectedSet == null)
             expectedSet = new HashSet<RfIdentification>();
-
+        if (usedSet == null)
+            usedSet = new HashSet<RfIdentification>();
         // End of process period. Adjust the trust values of all
         // the emitters we've seen and the ones we expected
         // to see but did not.
@@ -1006,11 +996,11 @@ public class BackendService extends LocationBackendService {
             if (wal != null) {
                 report(wal);
             }
-            lastMobileId = "";      // Allow another mobile tower report.
         }
 
         seenSet = new HashSet<RfIdentification>();
         expectedSet = new HashSet<RfIdentification >();
+        usedSet = new HashSet<RfIdentification>();
     }
 
     /**
