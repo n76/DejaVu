@@ -150,13 +150,6 @@ public class Cache {
                 rfE.incrementAge();
             }
 
-            // Remove aged out items from cache
-            for (RfIdentification id : agedSet) {
-                String key = id.toString();
-                //Log.d(TAG,"sync('"+key+"') - Aged out, removed from cache.");
-                workingSet.remove(key);
-            }
-
             if (doSync) {
                 db.beginTransaction();
                 for (Map.Entry<String, RfEmitter> e : workingSet.entrySet()) {
@@ -164,6 +157,14 @@ public class Cache {
                 }
                 db.endTransaction();
             }
+
+            // Remove aged out items from cache
+            for (RfIdentification id : agedSet) {
+                String key = id.toString();
+                //Log.d(TAG,"sync('"+key+"') - Aged out, removed from cache.");
+                workingSet.remove(key);
+            }
+
             if (workingSet.size() > MAX_WORKING_SET_SIZE) {
                 Log.d(TAG, "sync() - Clearing working set.");
                 workingSet.clear();
