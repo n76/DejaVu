@@ -162,7 +162,7 @@ public class BoundingBox {
 
     @Override
     public String toString() {
-        return "(" + north + "," + south + "," + east + "," + west + ")";
+        return "(" + north + "," + west + "," + south + "," + east + "," + center_lat + "," + center_lon + "," + radius + ")";
     }
 
     private void reset() {

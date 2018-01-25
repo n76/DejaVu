@@ -25,6 +25,7 @@ package org.fitchfamily.android.dejavu;
 
 import android.location.Location;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -62,6 +63,11 @@ public class RfEmitter {
     private static final long MINIMUM_TRUST = 0;
     private static final long REQUIRED_TRUST = 30;
     private static final long MAXIMUM_TRUST = 100;
+
+    // Tag/names for additional information on location records
+    public static final String LOC_RF_ID = "rfid";
+    public static final String LOC_RF_TYPE = "rftype";
+    public static final String LOC_ASU = "asu";
 
     public enum EmitterType {WLAN, MOBILE}
 
@@ -496,6 +502,11 @@ public class RfEmitter {
         Location boundaryBoxSized = _getLocation();
         if (boundaryBoxSized == null)
             return null;
+        Bundle extras = new Bundle();
+        extras.putString(LOC_RF_TYPE, type.toString());
+        extras.putString(LOC_RF_ID, id);
+        extras.putInt(LOC_ASU,asu);
+        boundaryBoxSized.setExtras(extras);
         return boundaryBoxSized;
     }
 
@@ -519,16 +530,8 @@ public class RfEmitter {
         location.setLatitude(coverage.getCenter_lat());
         location.setLongitude(coverage.getCenter_lon());
 
-        // At this point, accuracy is the maximum coverage area. Scale it based on
-        // the ASU as we assume we are closer to the center of the coverage if we
-        // have a high signal.
-
-        float scale = BackendService.MAXIMUM_ASU - asu + BackendService.MINIMUM_ASU;
-        scale = scale / BackendService.MAXIMUM_ASU;
-        float accuracy = (float)(this.getRadius() * scale);
-
         // Hard limit the minimum accuracy based on the type of emitter
-        location.setAccuracy(Math.max(accuracy,ourCharacteristics.minimumRange));
+        location.setAccuracy((float)Math.max(this.getRadius(),ourCharacteristics.minimumRange));
 
         return location;
     }

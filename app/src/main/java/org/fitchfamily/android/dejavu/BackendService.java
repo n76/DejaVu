@@ -91,9 +91,6 @@ public class BackendService extends LocationBackendService {
 
     // KPH -> Meters/millisec (KPH * 1000) / (60*60*1000) -> KPH/3600
     public static final float EXPECTED_SPEED = 120.0f / 3600;           // 120KPH (74 MPH)
-    public static final float MINIMUM_BELIEVABLE_ACCURACY = 15.0F;
-
-    private static final double WEIGHTING_FACTOR = 1000.0;
 
     /**
      * Process noise for lat and lon.
@@ -825,9 +822,8 @@ public class BackendService extends LocationBackendService {
     }
 
     /**
-     * Compute our current location using both a Kalman filter and a weighted
-     * average algoritm. We also keep track of the types of emitters we have
-     * seen for the end of period processing.
+     * Compute our current location using a weighted average algorithm. We also keep
+     * track of the types of emitters we have seen for the end of period processing.
      *
      * @param locations The set of coverage information for the current observations
      * @param myWork All the information about the current work item.
@@ -844,7 +840,7 @@ public class BackendService extends LocationBackendService {
             weightedAverageLocation = new WeightedAverage();
 
         for (Location l : locations) {
-            weightedAverageLocation.add(l, (WEIGHTING_FACTOR / Math.max(l.getAccuracy(),MINIMUM_BELIEVABLE_ACCURACY)));
+            weightedAverageLocation.add(l);
         }
     }
 

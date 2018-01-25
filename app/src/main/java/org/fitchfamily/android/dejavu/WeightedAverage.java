@@ -12,6 +12,7 @@ import android.util.Log;
 
 public class WeightedAverage {
     public static final String TAG="DejaVu wgtAvg";
+    public static final float MINIMUM_BELIEVABLE_ACCURACY = 15.0F;
 
     // Latitude averaging variables
     private double wSumLat;
@@ -42,11 +43,31 @@ public class WeightedAverage {
         timeMs = 0;
     }
 
-    public void add(Location loc, double weight) {
+    public void add(Location loc) {
         if (loc == null)
             return;
 
+        float asu = loc.getExtras().getInt(RfEmitter.LOC_ASU);
+//        String rfid = loc.getExtras().getString(RfEmitter.LOC_RF_ID);
+//        String rfType = loc.getExtras().getString(RfEmitter.LOC_RF_TYPE);
+//        Log.d(TAG,"add(): Type="+rfType+", ID='"+rfid+"', ASU = " + asu);
+
         reportAccuracy = loc.getAccuracy();
+        // At this point, accuracy is the maximum coverage area. Scale it based on
+        // the ASU as we assume we are closer to the center of the coverage if we
+        // have a high signal.
+        //
+        // Example: ASU = 1 => scale = (31-1+1)/31 = 1.0
+        // Example: ASU = 31 => scale = (31-31+1)/31 ~= 0.03;
+
+        float scale = BackendService.MAXIMUM_ASU - asu + BackendService.MINIMUM_ASU;
+        scale = scale / BackendService.MAXIMUM_ASU;
+        reportAccuracy = (float)Math.max(reportAccuracy * scale, 1.0);
+
+        // Weight this location based on how close we think we may be to the
+        // center of its coverage
+        double weight = 1.0/reportAccuracy;
+
         count++;
         //Log.d(TAG,"add() entry: weight="+weight+", count="+count);
 
@@ -96,7 +117,7 @@ public class WeightedAverage {
             double cosLat = Math.max(BackendService.MIN_COS, Math.cos(Math.toRadians(meanLat)));
             double sdMetersLon = sdLon * BackendService.DEG_TO_METER * cosLat;
 
-            float acc = (float) Math.max(sdMetersLat, sdMetersLon);
+            float acc = (float) Math.max(Math.max(sdMetersLat, sdMetersLon),MINIMUM_BELIEVABLE_ACCURACY);
             location.setAccuracy(acc);
         }
 
