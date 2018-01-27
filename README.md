@@ -45,7 +45,7 @@ What is stored in the database
 ------------------------------
 For each RF emitter detected an estimate of its coverage area (center and radius) and an estimate of how much it can be trusted is saved.
 
-For WLAN/WiFi APs the SSID is also saved for debug purposes. Analysis of the SSIDs detected by the phone can help identify name patterns used on mobile APs. The backend attempts to remove records from the database if the RF emitter seems to have moved or disappeared.
+For WLAN/WiFi APs the SSID is also saved for debug purposes. Analysis of the SSIDs detected by the phone can help identify name patterns used on mobile APs. The backend removes records from the database if the RF emitter seems to have moved, has disappeared or has a SSID that is associated with WLAN/WiFi APs that are often mobile (e.g. "Joes iPhone").
 
 Clearing the database
 ---------------------
