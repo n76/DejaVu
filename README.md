@@ -1,6 +1,6 @@
 Déjá Vu - A Local RF Based Backend
 ==================================
-[UnifiedNlp](https://github.com/microg/android_packages_apps_UnifiedNlp) backend that uses locally acquired WLAN/WiFi AP and mobile/cellular tower data to resolve user location. Collectively, “WLAN/WiFi and mobile/cellular” signals will be called “RF emitters” below.
+This is a backend for [UnifiedNlp](https://github.com/microg/android_packages_apps_UnifiedNlp) that uses locally acquired WLAN/WiFi AP and mobile/cellular tower data to resolve user location. Collectively, “WLAN/WiFi and mobile/cellular” signals will be called “RF emitters” below.
 
 Conceptually, this backend consists of two parts sharing a common database. One part passively monitors the GPS. If the GPS has acquired and has a good position accuracy, then the coverage maps for RF emitters detected by the phone are created and saved.
 
@@ -19,7 +19,7 @@ This grew out of frustration with my earlier [mobile tower backend’s](https://
 
 I decided that I wanted a mobile/cellular backend that worked the same way as [my WLAN/WiFi backend](https://github.com/n76/wifi_backend). Initially I considered adding mobile/cellular support to the WLAN/WiFi backend.
 
-However, the WLAN/WiFi backend had grown over time and had developed a fairly large and complex set of settings that had to be repeatedly explained. And, in retrospect, seemed overly complex.
+However, the WLAN/WiFi backend had grown over time and had developed complex settings that had to be repeatedly explained.
 
 Thus this new backend that has been written from scratch, admittedly with some copying and much inspiration from the two previous backends.
 
@@ -45,7 +45,7 @@ What is stored in the database
 ------------------------------
 For each RF emitter detected an estimate of its coverage area (center and radius) and an estimate of how much it can be trusted is saved.
 
-For WLAN/WiFi APs the SSID is also saved for debug purposes. Analysis of the SSIDs detected by te phone can help identify name patterns used on mobile APs. The backend attempts to remove records from the database if the RF emitter seems to have moved or disappeared.
+For WLAN/WiFi APs the SSID is also saved for debug purposes. Analysis of the SSIDs detected by the phone can help identify name patterns used on mobile APs. The backend attempts to remove records from the database if the RF emitter seems to have moved or disappeared.
 
 Clearing the database
 ---------------------
@@ -56,7 +56,7 @@ Moved RF Emitter Handling
 For position computations we wish to only use stationary RF emitters. For mobile/cellular towers this is not a huge problem. But with transit systems providing WiFi, car manufacturer's building WiFi hotspots into vehicles and the general use of WiFi tethering on mobile/cell phones, moving APs is an issue.
 
 This backend attempts to handle that in several ways.
-1. If the SSID of a WiFi AP matches a known pattern for an AP that is likely to be moving, the AP is “blacklisted”. Examples include SSIDs that have the name of a known transit company, SSIDs that contain "iphone" in the name, etc.
+1. If the SSID of a WiFi AP matches a known pattern for an AP that is likely to be moving, the AP is “blacklisted”. Examples include SSIDs that have the name of a known transit company, SSIDs that contain "iphone" in the name, etc. You can examine the black list logic in the blacklistWifi() method of the [RfEmitter class](https://github.com/n76/DejaVu/blob/master/app/src/main/java/org/fitchfamily/android/dejavu/RfEmitter.java).
 2. A RF Emitter needs to be seen multiple times in locations that are reasonably close to one another before it is trusted.
 3. If the implied coverage area for a RF emitter is implausibly large, it is assumed that it has moved. Moved emitters will not be trusted again until they have a number of observations compatible with their new location.
 4. When a scan completes, the RF emitters are grouped by how close they are to one another. An emitter that is implausibly far from others ends up in its own group. We use the largest group of emitters to compute location.
