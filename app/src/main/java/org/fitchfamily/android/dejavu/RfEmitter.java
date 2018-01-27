@@ -68,6 +68,7 @@ public class RfEmitter {
     public static final String LOC_RF_ID = "rfid";
     public static final String LOC_RF_TYPE = "rftype";
     public static final String LOC_ASU = "asu";
+    public static final String LOC_MIN_COUNT = "minCount";
 
     public enum EmitterType {WLAN, MOBILE, INVALID}
 
@@ -116,6 +117,8 @@ public class RfEmitter {
     private long trust;
     private BoundingBox coverage;
     private String note;
+    private Long mLastUpdateTimeMs;
+    private Long mElapsedRealtimeNanos;
 
     private int ageSinceLastUse;        // Count of periods since last used (for caching purposes)
 
@@ -152,6 +155,8 @@ public class RfEmitter {
         ourCharacteristics = getRfCharacteristics(mType);
         trust = ourCharacteristics.discoveryTrust;
         note = "";
+        mLastUpdateTimeMs = System.currentTimeMillis();
+        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
         resetAge();
         status = EmitterStatus.STATUS_UNKNOWN;
     }
@@ -474,6 +479,9 @@ public class RfEmitter {
             return;
         }
 
+        mLastUpdateTimeMs = System.currentTimeMillis();
+        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
+
         if (coverage == null) {
             Log.d(TAG, "updateLocation("+logString()+") emitter is new.");
             coverage = new BoundingBox(gpsLoc.getLatitude(), gpsLoc.getLongitude(), 0.0f);
@@ -513,6 +521,7 @@ public class RfEmitter {
         extras.putString(LOC_RF_TYPE, type.toString());
         extras.putString(LOC_RF_ID, id);
         extras.putInt(LOC_ASU,asu);
+        extras.putLong(LOC_MIN_COUNT, ourCharacteristics.minCount);
         boundaryBoxSized.setExtras(extras);
         return boundaryBoxSized;
     }
@@ -529,11 +538,10 @@ public class RfEmitter {
             return null;
 
         final Location location = new Location(BackendService.LOCATION_PROVIDER);
-        Long timeMs = System.currentTimeMillis();
 
-        location.setTime(timeMs);
+        location.setTime(mLastUpdateTimeMs);
         if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
+            location.setElapsedRealtimeNanos(mElapsedRealtimeNanos);
         location.setLatitude(coverage.getCenter_lat());
         location.setLongitude(coverage.getCenter_lon());
 

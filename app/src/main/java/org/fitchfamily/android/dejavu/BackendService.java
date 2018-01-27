@@ -726,7 +726,7 @@ public class BackendService extends LocationBackendService {
         // Update emitter coverage based on GPS as needed and get the set of locations
         // the emitters are known to be seen at.
 
-        Collection<Location> locations = updateEmitters( emitters, myWork.loc, myWork.time);
+        updateEmitters( emitters, myWork.loc, myWork.time);
 
         // If we are dealing with very movable emitters, then try to detect ones that
         // have moved out of the area. We do that by collecting the set of emitters
@@ -737,38 +737,18 @@ public class BackendService extends LocationBackendService {
             BoundingBox bb = new BoundingBox(myWork.loc.getLatitude(),
                     myWork.loc.getLongitude(),
                     rfChar.typicalRange);
-
-            // We may be in an area where RF propagation is longer than typical. . .
-            // Adjust the bounding box based on the emitters we actually see.
-            for (Location l : locations) {
-                bb.update(l.getLatitude(), l.getLongitude());
-            }
             updateExpected(bb, myWork.rfType);
         }
 
-        //Log.d(TAG,"backgroundProcessing() - Got " + myWork.rfType + " data.");
-        switch (myWork.rfType) {
-            case WLAN:
-                // Emitters, especially Wifi APs, can be mobile. We cull them by making
-                // subsets where all members of the set are reasonably close to one
-                // another and then take the largest group.
-                //
-                // To protect against moving WiFi APs,require the largest group
-                // of APs has at least two members.
-
-                //Log.d(TAG, "WiFi APs seen: " + locations.toString());
-                locations = culledEmitters(locations, rfChar.moveDetectDistance);
-                if ((locations != null) && (locations.size() >= rfChar.minCount)) {
-                    computePostion(locations, myWork);
-                }
-                break;
-
-            case MOBILE:
-                //Log.d(TAG, "Mobile towers seen: " + locations.toString());
-                computePostion(locations, myWork);
-                break;
-        }
-        endOfPeriodProcessing(myWork);
+        // Check for the end of our collection period. If we are in a new period
+        // then finish off the processing for the previous period.
+        long currentProcessTime = System.currentTimeMillis();
+        if (currentProcessTime < nextReportTime)
+            return;
+        nextReportTime += REPORTING_INTERVAL;
+        if (nextReportTime <= currentProcessTime)
+            nextReportTime = currentProcessTime + REPORTING_INTERVAL;
+        endOfPeriodProcessing();
     }
 
     /**
@@ -777,10 +757,9 @@ public class BackendService extends LocationBackendService {
      * @param emitters The emitters we have just observed
      * @param gps The GPS position at the time the observations were collected.
      * @param curTime The time the observations were collected
-     * @return A list of the coverage areas for the observed RF emitters.
      */
-    private synchronized List<Location> updateEmitters(Collection<RfEmitter> emitters, Location gps, long curTime) {
-        List<Location> locations = new LinkedList<>();
+    private synchronized void updateEmitters(Collection<RfEmitter> emitters, Location gps, long curTime) {
+
         if (emitterCache == null) {
             Log.d(TAG,"updateEmitters() - emitterCache is null?!?");
             emitterCache = new Cache(this);
@@ -788,14 +767,25 @@ public class BackendService extends LocationBackendService {
 
         for (RfEmitter emitter : emitters) {
             emitter.updateLocation(gps);
+        }
+    }
 
-            Location thisLoc = emitter.getLocation();
-            if (thisLoc != null) {
-                //Log.d(TAG,"updateEmitters() - Using " + emitter.logString());
-                thisLoc.setTime(curTime);
-                locations.add(thisLoc);
-            //} else {
-            //    Log.d(TAG, "updateDatase() - no location for " + emitter.logString());
+    /**
+     * Get coverage estimates for a list of emitter IDs. Locations are marked with the
+     * time of last update, etc.
+     *
+     * @param rfids IDs of the emitters desired
+     * @return A list of the coverage areas for the emitters
+     */
+    private List<Location> getRfLocations(Collection<RfIdentification> rfids) {
+        List<Location> locations = new LinkedList<>();
+        for (RfIdentification id : rfids) {
+            RfEmitter e = emitterCache.get(id);
+            if (e != null) {
+                Location l = e.getLocation();
+                if (l != null) {
+                    locations.add(l);
+                }
             }
         }
         return locations;
@@ -809,13 +799,10 @@ public class BackendService extends LocationBackendService {
      * a set of used emitters.
      *
      * @param locations The set of coverage information for the current observations
-     * @param myWork All the information about the current work item.
      */
-    private synchronized void computePostion(Collection<Location> locations, WorkItem myWork) {
+    private synchronized void computePostion(Collection<Location> locations) {
         if (locations == null)
             return;
-
-        RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(myWork.rfType);
 
         // Determine location using a weighted average.
 
@@ -853,13 +840,11 @@ public class BackendService extends LocationBackendService {
      * So we will group the emitters based on that large distance.
      *
      * @param locations A collection of the coverages for the current observation set
-     * @param moveThreshold The maximum distance apart the emitters can be before we
-     *                      believe they should not be considered together.
      * @return The largest set of coverages found within the raw observations. That is
      * the most believable set of coverage areas.
      */
-    private Set<Location> culledEmitters(Collection<Location> locations, float moveThreshold) {
-        Set<Set<Location>> locationGroups = divideInGroups(locations, moveThreshold);
+    private Set<Location> culledEmitters(Collection<Location> locations) {
+        Set<Set<Location>> locationGroups = divideInGroups(locations);
 
         List<Set<Location>> clsList = new ArrayList<Set<Location>>(locationGroups);
         Collections.sort(clsList, new Comparator<Set<Location>>() {
@@ -870,10 +855,20 @@ public class BackendService extends LocationBackendService {
         });
 
         if (!clsList.isEmpty()) {
-            return clsList.get(0);
-        } else {
-            return null;
+            Set<Location> rslt = clsList.get(0);
+
+            // Determine minimum count for a valid group of emitters.
+            // The RfEmitter class will have put the min count into the location
+            // it provided.
+            Long reqdCount = 99999l;            // Some impossibly big number
+            for (Location l : rslt) {
+                reqdCount = Math.min(l.getExtras().getLong(RfEmitter.LOC_MIN_COUNT,9999l),reqdCount);
+            }
+            //Log.d(TAG,"culledEmitters() reqdCount="+reqdCount+", size="+rslt.size());
+            if (rslt.size() >= reqdCount)
+                return rslt;
         }
+        return null;
     }
 
     /**
@@ -884,12 +879,9 @@ public class BackendService extends LocationBackendService {
      * the most believable group of observations to use to compute a position.
      *
      * @param locations A set of RF emitter coverage records
-     * @param accuracy The expected coverage radius of for the type of RF emitters
-     *                 being grouped
      * @return A set of coverage sets.
      */
-    private Set<Set<Location>> divideInGroups(Collection<Location> locations,
-                                                     double accuracy) {
+    private Set<Set<Location>> divideInGroups(Collection<Location> locations) {
 
         Set<Set<Location>> bins = new HashSet<Set<Location>>();
 
@@ -902,7 +894,7 @@ public class BackendService extends LocationBackendService {
 
         for (Location location : locations) {
             for (Set<Location> locGroup : bins) {
-                if (locationCompatibleWithGroup(location, locGroup, accuracy)) {
+                if (locationCompatibleWithGroup(location, locGroup)) {
                     locGroup.add(location);
                 }
             }
@@ -915,13 +907,10 @@ public class BackendService extends LocationBackendService {
      * enough to others in a group that we can believably add it to the group.
      * @param location The coverage area of the candidate emitter
      * @param locGroup The coverage areas of the emitters already in the group
-     * @param radius The coverage radius expected for they type of emitter
-     *                 we are dealing with.
-     * @return
+     * @return True if location is close to others in group
      */
     private boolean locationCompatibleWithGroup(Location location,
-                                                Set<Location> locGroup,
-                                                double radius) {
+                                                Set<Location> locGroup) {
 
         // If the location is within range of all current members of the
         // group, then we are compatible.
@@ -930,7 +919,8 @@ public class BackendService extends LocationBackendService {
                     location.getAccuracy() -
                     other.getAccuracy());
 
-            if (testDistance > radius) {
+            if (testDistance > 0.0) {
+                //Log.d(TAG,"locationCompatibleWithGroup(): "+testDistance);
                 return false;
             }
         }
@@ -942,29 +932,23 @@ public class BackendService extends LocationBackendService {
      * much need to report location to microG/UnifiedNlp more often than once every three
      * or four seconds. Another reason is that we can average more samples into each
      * report so there is a chance that our position computation is more accurate.
-     *
-     * @param myWork All the information about the current observations
      */
-    private void endOfPeriodProcessing(WorkItem myWork) {
-        if (emitterCache == null) {
-            Log.d(TAG,"endOfPeriodProcessing() - emitterCache is null?!?");
-            return;
-        }
-        if (seenSet == null)
-            seenSet = new HashSet<RfIdentification>();
-        if (expectedSet == null)
-            expectedSet = new HashSet<RfIdentification>();
-        if (usedSet == null)
-            usedSet = new HashSet<RfIdentification>();
-        // End of process period. Adjust the trust values of all
-        // the emitters we've seen and the ones we expected
-        // to see but did not.
-        long currentProcessTime = System.currentTimeMillis();
-        if (currentProcessTime < nextReportTime)
-            return;
-        nextReportTime = currentProcessTime + REPORTING_INTERVAL;
+    private void endOfPeriodProcessing() {
 
         //Log.d(TAG,"endOfPeriodProcessing() - Starting new process period.");
+
+        // Get most recent locations (with ASU, etc.) for the RF emitters we've seen
+        // in this observation period. While we are at it, increment the trust we have
+        // in each emitter seen.
+        if (weightedAverageLocation == null)
+            weightedAverageLocation = new WeightedAverage();
+        weightedAverageLocation.reset();
+        Collection<Location> locations = culledEmitters(getRfLocations(seenSet));
+        computePostion(locations);
+        Location wal = weightedAverageLocation.result();
+        if (wal != null) {
+            report(wal);
+        }
 
         // Increment the trust of the emitters we've seen and decrement the trust
         // of the emitters we expected to see but didn't.
@@ -987,16 +971,6 @@ public class BackendService extends LocationBackendService {
         // Sync all of our changes to the on flash database.
 
         emitterCache.sync();
-
-        // Report our best guess of position
-
-        if (weightedAverageLocation != null) {
-            Location wal = weightedAverageLocation.result();
-            weightedAverageLocation.reset();
-            if (wal != null) {
-                report(wal);
-            }
-        }
 
         seenSet = new HashSet<RfIdentification>();
         expectedSet = new HashSet<RfIdentification >();
