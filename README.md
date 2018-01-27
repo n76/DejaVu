@@ -70,7 +70,7 @@ Permissions Required
 ACCESS_COARSE_LOCATION|Allows backend to determine which cell towers your phone detects.
 ACCESS_FINE_LOCATION|Allows backend to monitor position reports from the GPS.
 
-Note: The backend uses standard Android API calls to determine if it has sufficient privileges before attempting privileged operations. But there appears to be an issue with some versions of CyanogenMod where the permission check succeeds when the backend does not actually have the permissions is needs. The result is a continuious serices of force closes which can lock up the Launcher UI or the phone. **If you are using CyanogenMod, you should grant permissions to Dévá Vu prior to selecting it in the settings UnifiedNlp or microG.** LineageOS 14.1 does not have this issue, nor does it seem to appear on AOSP based ROMs. See issues [2](https://github.com/n76/DejaVu/issues/2) and [8](https://github.com/n76/DejaVu/issues/8) in the bug list for details.
+Note: The backend uses standard Android API calls to determine if it has sufficient privileges before attempting privileged operations. But there appears to be an issue with some versions of CyanogenMod where the permission check succeeds when the backend does not actually have the permissions is needs. The result is a continuous serices of force closes which can lock up the Launcher UI or the phone. **If you are using CyanogenMod, you should grant permissions to Dévá Vu prior to selecting it in the settings UnifiedNlp or microG.** LineageOS 14.1 does not have this issue, nor does it seem to appear on AOSP based ROMs. See issues [2](https://github.com/n76/DejaVu/issues/2) and [8](https://github.com/n76/DejaVu/issues/8) in the bug list for details.
 
 Changes
 =======
