@@ -129,9 +129,6 @@ public class BackendService extends LocationBackendService {
 
     private Kalman gpsLocation;             // Filtered GPS (because GPS is so bad on Moto G4 Play)
 
-    private WeightedAverage weightedAverageLocation;
-    private Collection<Location> mobileLocations;
-
     //
     // Periodic process information.
     //
@@ -152,9 +149,9 @@ public class BackendService extends LocationBackendService {
     // So these numbers are the minimum time. Actual will be at least that based
     // on when we get GPS locations and/or update requests from microG/UnifiedNlp.
     //
-    private final static long REPORTING_INTERVAL   = 3600;                      // in milliseconds
-    private final static long MOBILE_SCAN_INTERVAL = REPORTING_INTERVAL/2;      // in milliseconds
-    private final static long WLAN_SCAN_INTERVAL   = REPORTING_INTERVAL/3;      // in milliseconds
+    private final static long REPORTING_INTERVAL   = 3600;                          // in milliseconds
+    private final static long MOBILE_SCAN_INTERVAL = REPORTING_INTERVAL/2 - 100;    // in milliseconds
+    private final static long WLAN_SCAN_INTERVAL   = REPORTING_INTERVAL/3 - 100;    // in milliseconds
 
     private long nextMobileScanTime;
     private long nextWlanScanTime;
@@ -800,24 +797,22 @@ public class BackendService extends LocationBackendService {
      *
      * @param locations The set of coverage information for the current observations
      */
-    private synchronized void computePostion(Collection<Location> locations) {
+    private Location computePostion(Collection<Location> locations) {
         if (locations == null)
-            return;
+            return null;
 
-        // Determine location using a weighted average.
-
-        if (weightedAverageLocation == null)
-            weightedAverageLocation = new WeightedAverage();
+        WeightedAverage weightedAverage = new WeightedAverage();
 
         for (Location l : locations) {
             String rftype_str = l.getExtras().getString(RfEmitter.LOC_RF_TYPE);
             String rfid_str = l.getExtras().getString(RfEmitter.LOC_RF_ID);
             RfIdentification rfIdentification = new RfIdentification(rfid_str, RfEmitter.typeOf(rftype_str));
             if (!usedSet.contains(rfIdentification)) {
-                weightedAverageLocation.add(l);
+                weightedAverage.add(l);
             }
             usedSet.add(rfIdentification);
         }
+        return weightedAverage.result();
     }
 
     /**
@@ -937,17 +932,16 @@ public class BackendService extends LocationBackendService {
 
         //Log.d(TAG,"endOfPeriodProcessing() - Starting new process period.");
 
-        // Get most recent locations (with ASU, etc.) for the RF emitters we've seen
-        // in this observation period. While we are at it, increment the trust we have
-        // in each emitter seen.
-        if (weightedAverageLocation == null)
-            weightedAverageLocation = new WeightedAverage();
-        weightedAverageLocation.reset();
+        // Estimate location using weighted average of the most recent
+        // observations from the set of RF emitters we have seen. We cull
+        // the locations based on distance from each other to reduce the
+        // chance that a moved/moving emitter will be used in the computation.
+
         Collection<Location> locations = culledEmitters(getRfLocations(seenSet));
-        computePostion(locations);
-        Location wal = weightedAverageLocation.result();
-        if (wal != null) {
-            report(wal);
+        Location weightedAverageLocation = computePostion(locations);
+        if (weightedAverageLocation != null) {
+            //Log.d(TAG, "endOfPeriodProcessing(): " + weightedAverageLocation.toString());
+            report(weightedAverageLocation);
         }
 
         // Increment the trust of the emitters we've seen and decrement the trust
