@@ -137,8 +137,6 @@ public class BackendService extends LocationBackendService {
     // to see but didn't we decrement.
     //
     Set<RfIdentification> seenSet;
-    Set<RfIdentification> expectedSet;
-    Set<RfIdentification> usedSet;
     Cache emitterCache;
 
     //
@@ -699,10 +697,6 @@ public class BackendService extends LocationBackendService {
 
         if (seenSet == null)
             seenSet = new HashSet<RfIdentification>();
-        if (expectedSet == null)
-            expectedSet = new HashSet<RfIdentification>();
-        if (usedSet == null)
-            usedSet = new HashSet<RfIdentification>();
 
         Collection<RfEmitter> emitters = new HashSet<>();
 
@@ -724,18 +718,6 @@ public class BackendService extends LocationBackendService {
         // the emitters are known to be seen at.
 
         updateEmitters( emitters, myWork.loc, myWork.time);
-
-        // If we are dealing with very movable emitters, then try to detect ones that
-        // have moved out of the area. We do that by collecting the set of emitters
-        // that we expected to see in this area based on the GPS.
-
-        RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(myWork.rfType);
-        if ((myWork.loc != null) && (myWork.loc.getAccuracy() < rfChar.reqdGpsAccuracy)) {
-            BoundingBox bb = new BoundingBox(myWork.loc.getLatitude(),
-                    myWork.loc.getLongitude(),
-                    rfChar.typicalRange);
-            updateExpected(bb, myWork.rfType);
-        }
 
         // Check for the end of our collection period. If we are in a new period
         // then finish off the processing for the previous period.
@@ -802,15 +784,8 @@ public class BackendService extends LocationBackendService {
             return null;
 
         WeightedAverage weightedAverage = new WeightedAverage();
-
         for (Location l : locations) {
-            String rftype_str = l.getExtras().getString(RfEmitter.LOC_RF_TYPE);
-            String rfid_str = l.getExtras().getString(RfEmitter.LOC_RF_ID);
-            RfIdentification rfIdentification = new RfIdentification(rfid_str, RfEmitter.typeOf(rftype_str));
-            if (!usedSet.contains(rfIdentification)) {
-                weightedAverage.add(l);
-            }
-            usedSet.add(rfIdentification);
+            weightedAverage.add(l);
         }
         return weightedAverage.result();
     }
@@ -953,6 +928,21 @@ public class BackendService extends LocationBackendService {
                 e.incrementTrust();
         }
 
+        // If we are dealing with very movable emitters, then try to detect ones that
+        // have moved out of the area. We do that by collecting the set of emitters
+        // that we expected to see in this area based on the GPS and our own location
+        // computation.
+
+        Set<RfIdentification> expectedSet = new HashSet<RfIdentification >();
+        if (weightedAverageLocation != null) {
+            emitterCache.sync();        // getExpected() ends bypassing the cache, so sync first
+
+            expectedSet.addAll(getExpected(weightedAverageLocation, RfEmitter.EmitterType.WLAN));
+            if (gpsLocation != null) {
+                expectedSet.addAll(getExpected(gpsLocation.getLocation(), RfEmitter.EmitterType.WLAN));
+            }
+        }
+
         for (RfIdentification  u : expectedSet) {
             if (!seenSet.contains(u)) {
                 RfEmitter e = emitterCache.get(u);
@@ -962,13 +952,10 @@ public class BackendService extends LocationBackendService {
             }
         }
 
-        // Sync all of our changes to the on flash database.
+        // Sync all of our changes to the on flash database and reset the RF emitters we've seen.
 
         emitterCache.sync();
-
         seenSet = new HashSet<RfIdentification>();
-        expectedSet = new HashSet<RfIdentification >();
-        usedSet = new HashSet<RfIdentification>();
     }
 
     /**
@@ -977,16 +964,17 @@ public class BackendService extends LocationBackendService {
      * that may have changed locations (or gone off the air). When aged out we
      * can remove them from our database.
      *
-     * @param bb A bounding box (north, south, east and west) around a position
+     * @param loc The location we think we are at.
      * @param rfType The type of RF emitters we expect to see within the bounding
      *               box.
+     * @return A set of IDs for the RF emitters we should expect in this location.
      */
-    private void updateExpected(BoundingBox bb, RfEmitter.EmitterType rfType) {
-        if (emitterCache == null)
-            return;
-        if (expectedSet == null)
-            expectedSet = new HashSet<RfIdentification>();
-        expectedSet.addAll(emitterCache.getEmitters(rfType, bb));
+    private Set<RfIdentification> getExpected(Location loc, RfEmitter.EmitterType rfType) {
+        RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(rfType);
+        if ((loc == null) || (loc.getAccuracy() > rfChar.typicalRange))
+            return new HashSet<RfIdentification >();;
+        BoundingBox bb = new BoundingBox(loc.getLatitude(), loc.getLongitude(), rfChar.typicalRange);
+        return emitterCache.getEmitters(rfType, bb);
     }
 }
 
