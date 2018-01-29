@@ -85,7 +85,7 @@ public class WeightedAverage {
         meanLon = oldMean + (weight / wSumLon) * (lon - oldMean);
         sLon = sLon + weight * (lon - oldMean) * (lon - meanLon);
 
-        timeMs = loc.getTime();
+        timeMs = Math.max(timeMs,loc.getTime());
     }
 
     public Location result() {
