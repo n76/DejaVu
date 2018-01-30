@@ -708,8 +708,7 @@ public class BackendService extends LocationBackendService {
             seenSet.add(o.getIdent());
             RfEmitter e = emitterCache.get(o.getIdent());
             if (e != null) {
-                e.setAsu(o.getAsu());
-                e.setNote(o.getNote());
+                e.setLastObservation(o);
                 emitters.add(e);
             }
         }

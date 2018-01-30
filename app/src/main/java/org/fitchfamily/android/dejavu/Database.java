@@ -328,7 +328,7 @@ public class Database extends SQLiteOpenHelper {
         Cursor cursor = getReadableDatabase().rawQuery(query, null);
         try {
             if (cursor.moveToFirst()) {
-                rslt = new RfEmitter(ident, 0);
+                rslt = new RfEmitter(ident);
                 EmitterInfo ei = new EmitterInfo();
                 ei.trust = (int) cursor.getLong(1);
                 ei.latitude = (double) cursor.getDouble(2);

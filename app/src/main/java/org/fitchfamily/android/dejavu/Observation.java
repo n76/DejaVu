@@ -22,6 +22,8 @@ package org.fitchfamily.android.dejavu;
  * Created by tfitch on 10/5/17.
  */
 
+import android.os.SystemClock;
+
 /**
  * A single observation made of a RF emitter.
  *
@@ -38,10 +40,15 @@ public class Observation implements Comparable<Observation> {
     private int asu;
     private String note;
 
+    private long mLastUpdateTimeMs;
+    private long mElapsedRealtimeNanos;
+
     Observation(String id, RfEmitter.EmitterType t) {
         ident = new RfIdentification(id, t);
         note = "";
         asu = BackendService.MINIMUM_ASU;
+        mLastUpdateTimeMs = System.currentTimeMillis();
+        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
     }
 
     public int compareTo(Observation o) {
@@ -85,6 +92,14 @@ public class Observation implements Comparable<Observation> {
 
     public int getAsu() {
         return asu;
+    }
+
+    public long getLastUpdateTimeMs() {
+        return mLastUpdateTimeMs;
+    }
+
+    public long getElapsedRealtimeNanos() {
+        return mElapsedRealtimeNanos;
     }
 
     public void setNote(String n) {

@@ -113,31 +113,27 @@ public class RfEmitter {
 
     private EmitterType type;
     private String id;
-    private int asu;
     private long trust;
     private BoundingBox coverage;
     private String note;
-    private Long mLastUpdateTimeMs;
-    private Long mElapsedRealtimeNanos;
+
+    private Observation mLastObservation;
 
     private int ageSinceLastUse;        // Count of periods since last used (for caching purposes)
 
     private EmitterStatus status;
 
     RfEmitter(RfIdentification ident) {
-        initSelf(ident.getRfType(), ident.getRfId(), 0);
-    }
-
-    RfEmitter(RfIdentification ident, int signal) {
-        initSelf(ident.getRfType(), ident.getRfId(), signal);
+        initSelf(ident.getRfType(), ident.getRfId());
     }
 
     RfEmitter(Observation o) {
-        initSelf(o.getIdent().getRfType(), o.getIdent().getRfId(), o.getAsu());
+        initSelf(o.getIdent().getRfType(), o.getIdent().getRfId());
+        mLastObservation = o;
     }
 
-    RfEmitter(EmitterType mType, String ident, int signal) {
-        initSelf(mType, ident, signal);
+    RfEmitter(EmitterType mType, String ident) {
+        initSelf(mType, ident);
     }
 
     /**
@@ -145,18 +141,15 @@ public class RfEmitter {
      *
      * @param mType The type of the RF emitter (WLAN, MOBILE, etc.)
      * @param ident The identification of the emitter. Must be unique within type
-     * @param signal The current signal level measurement in ASU
      */
-    private void initSelf(EmitterType mType, String ident, int signal) {
+    private void initSelf(EmitterType mType, String ident) {
         type = mType;
         id = ident;
-        setAsu(signal);
         coverage = null;
+        mLastObservation = null;
         ourCharacteristics = getRfCharacteristics(mType);
         trust = ourCharacteristics.discoveryTrust;
         note = "";
-        mLastUpdateTimeMs = System.currentTimeMillis();
-        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
         resetAge();
         status = EmitterStatus.STATUS_UNKNOWN;
     }
@@ -248,15 +241,9 @@ public class RfEmitter {
         return 0.0;
     }
 
-    public void setAsu(int signal) {
-        if (signal > BackendService.MAXIMUM_ASU)
-            asu = BackendService.MAXIMUM_ASU;
-        else if (signal < BackendService.MINIMUM_ASU)
-            asu = BackendService.MINIMUM_ASU;
-        else
-            asu = signal;
-        mLastUpdateTimeMs = System.currentTimeMillis();
-        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
+    public void setLastObservation(Observation obs) {
+        mLastObservation = obs;
+        note = obs.getNote();
     }
 
     public void setNote(String n) {
@@ -360,7 +347,7 @@ public class RfEmitter {
     }
 
     public String logString() {
-        return "RF Emitter: Type=" + type + ", ID='" + id + "', ASU=" + asu + ", Note='" + note + "'";
+        return "RF Emitter: Type=" + type + ", ID='" + id + "', Note='" + note + "'";
     }
 
     /**
@@ -461,8 +448,6 @@ public class RfEmitter {
             //Log.d(TAG,"updateInfo() - Setting info for '"+id+"'");
             trust = emitterInfo.trust;
             note = emitterInfo.note;
-            mLastUpdateTimeMs = System.currentTimeMillis();
-            mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
             changeStatus(EmitterStatus.STATUS_CACHED, "updateInfo('"+logString()+"')");
         }
     }
@@ -482,9 +467,6 @@ public class RfEmitter {
             // Log.d(TAG, "updateLocation("+logString()+") No GPS location or location inaccurate.");
             return;
         }
-
-        mLastUpdateTimeMs = System.currentTimeMillis();
-        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
 
         if (coverage == null) {
             Log.d(TAG, "updateLocation("+logString()+") emitter is new.");
@@ -516,18 +498,33 @@ public class RfEmitter {
      * information.
      */
     public  Location getLocation() {
+        // If we have no observation of the emitter we ought not give a
+        // position estimate based on it.
+        if (mLastObservation == null)
+            return null;
+
+        // If we don't trust the location, we ought not give a position
+        // estimate based on it.
         if ((trust < REQUIRED_TRUST) || (status == EmitterStatus.STATUS_BLACKLISTED))
             return null;
-        Location boundaryBoxSized = _getLocation();
-        if (boundaryBoxSized == null)
+
+        // If we don't have a coverage estimate we will get back a null location
+        Location location = _getLocation();
+        if (location == null)
             return null;
+
+        // Time tags based on time of most recent observation
+        location.setTime(mLastObservation.getLastUpdateTimeMs());
+        if (Build.VERSION.SDK_INT >= 17)
+            location.setElapsedRealtimeNanos(mLastObservation.getElapsedRealtimeNanos());
+
         Bundle extras = new Bundle();
         extras.putString(LOC_RF_TYPE, type.toString());
         extras.putString(LOC_RF_ID, id);
-        extras.putInt(LOC_ASU,asu);
+        extras.putInt(LOC_ASU,mLastObservation.getAsu());
         extras.putLong(LOC_MIN_COUNT, ourCharacteristics.minCount);
-        boundaryBoxSized.setExtras(extras);
-        return boundaryBoxSized;
+        location.setExtras(extras);
+        return location;
     }
 
     /**
@@ -543,9 +540,6 @@ public class RfEmitter {
 
         final Location location = new Location(BackendService.LOCATION_PROVIDER);
 
-        location.setTime(mLastUpdateTimeMs);
-        if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(mElapsedRealtimeNanos);
         location.setLatitude(coverage.getCenter_lat());
         location.setLongitude(coverage.getCenter_lon());
 
