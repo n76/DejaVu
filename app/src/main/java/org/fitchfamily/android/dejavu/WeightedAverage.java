@@ -117,7 +117,7 @@ public class WeightedAverage {
             double cosLat = Math.max(BackendService.MIN_COS, Math.cos(Math.toRadians(meanLat)));
             double sdMetersLon = sdLon * BackendService.DEG_TO_METER * cosLat;
 
-            float acc = (float) Math.max(Math.max(sdMetersLat, sdMetersLon),MINIMUM_BELIEVABLE_ACCURACY);
+            float acc = (float) Math.max(Math.sqrt((sdMetersLat*sdMetersLat)+(sdMetersLon*sdMetersLon)),MINIMUM_BELIEVABLE_ACCURACY);
             location.setAccuracy(acc);
         }
 

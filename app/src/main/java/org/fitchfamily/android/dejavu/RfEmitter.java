@@ -255,6 +255,8 @@ public class RfEmitter {
             asu = BackendService.MINIMUM_ASU;
         else
             asu = signal;
+        mLastUpdateTimeMs = System.currentTimeMillis();
+        mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
     }
 
     public void setNote(String n) {
@@ -459,6 +461,8 @@ public class RfEmitter {
             //Log.d(TAG,"updateInfo() - Setting info for '"+id+"'");
             trust = emitterInfo.trust;
             note = emitterInfo.note;
+            mLastUpdateTimeMs = System.currentTimeMillis();
+            mElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos();
             changeStatus(EmitterStatus.STATUS_CACHED, "updateInfo('"+logString()+"')");
         }
     }
