@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Refactor/clean up logic flow and position computation.
+- Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.1.1] -2018-01-30
+### Changed
+- Refactor/clean up logic flow and position computation.
 
 ## [1.1.0] - 2018-01-25
 ### Changed
