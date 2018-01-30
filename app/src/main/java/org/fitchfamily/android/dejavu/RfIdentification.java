@@ -25,8 +25,6 @@ package org.fitchfamily.android.dejavu;
 
 import org.fitchfamily.android.dejavu.RfEmitter.EmitterType;
 
-import java.util.Comparator;
-
 /**
  * This class forms a complete identification for a RF emitter.
  *

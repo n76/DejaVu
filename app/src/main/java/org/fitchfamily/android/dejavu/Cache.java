@@ -23,12 +23,11 @@ package org.fitchfamily.android.dejavu;
  */
 
 import android.content.Context;
-import android.provider.ContactsContract;
 import android.util.Log;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.Set;
 
 /**

@@ -26,7 +26,6 @@ package org.fitchfamily.android.dejavu;
 import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.util.Log;
 
 import java.util.Locale;

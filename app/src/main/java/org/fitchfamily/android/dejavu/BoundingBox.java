@@ -22,7 +22,6 @@ package org.fitchfamily.android.dejavu;
  * Created by tfitch on 9/28/17.
  */
 
-import android.accessibilityservice.AccessibilityService;
 import android.location.Location;
 
 public class BoundingBox {
