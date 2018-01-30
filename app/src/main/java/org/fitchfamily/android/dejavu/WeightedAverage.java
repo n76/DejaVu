@@ -7,8 +7,6 @@ package org.fitchfamily.android.dejavu;
 import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.SystemClock;
-import android.util.Log;
 
 public class WeightedAverage {
     public static final String TAG="DejaVu wgtAvg";
@@ -28,8 +26,9 @@ public class WeightedAverage {
 
     private int count;
     private long timeMs;
+    private long mElapsedRealtimeNanos;
 
-    private float reportAccuracy;
+    private float accuracyOfLastReport;
 
     WeightedAverage() {
         reset();
@@ -41,32 +40,28 @@ public class WeightedAverage {
 
         count = 0;
         timeMs = 0;
+        mElapsedRealtimeNanos = 0;
     }
 
     public void add(Location loc) {
         if (loc == null)
             return;
 
-        float asu = loc.getExtras().getInt(RfEmitter.LOC_ASU);
-//        String rfid = loc.getExtras().getString(RfEmitter.LOC_RF_ID);
-//        String rfType = loc.getExtras().getString(RfEmitter.LOC_RF_TYPE);
-//        Log.d(TAG,"add(): Type="+rfType+", ID='"+rfid+"', ASU = " + asu);
-
-        reportAccuracy = loc.getAccuracy();
-        // At this point, accuracy is the maximum coverage area. Scale it based on
-        // the ASU as we assume we are closer to the center of the coverage if we
-        // have a high signal.
         //
-        // Example: ASU = 1 => scale = (31-1+1)/31 = 1.0
-        // Example: ASU = 31 => scale = (31-31+1)/31 ~= 0.03;
+        // We weight each location based on the signal strength, the higher the
+        // strength the higher the weight. And we also use the estimated
+        // coverage diameter. The larger the diameter, the lower the weight.
+        //
+        // ASU (signal strength) has been hard limited to always be >= 1
+        // Accuracy (estimate of coverage radius) has been hard limited to always
+        // be >= a emitter type minimum.
+        //
+        // So we are safe in computing the weight by dividing ASU by Accuracy.
+        //
 
-        float scale = BackendService.MAXIMUM_ASU - asu + BackendService.MINIMUM_ASU;
-        scale = scale / BackendService.MAXIMUM_ASU;
-        reportAccuracy = (float)Math.max(reportAccuracy * scale, 1.0);
-
-        // Weight this location based on how close we think we may be to the
-        // center of its coverage
-        double weight = 1.0/reportAccuracy;
+        float asu = loc.getExtras().getInt(RfEmitter.LOC_ASU);
+        accuracyOfLastReport = loc.getAccuracy();
+        double weight = asu/ accuracyOfLastReport;
 
         count++;
         //Log.d(TAG,"add() entry: weight="+weight+", count="+count);
@@ -86,6 +81,7 @@ public class WeightedAverage {
         sLon = sLon + weight * (lon - oldMean) * (lon - meanLon);
 
         timeMs = Math.max(timeMs,loc.getTime());
+        mElapsedRealtimeNanos = Math.max(mElapsedRealtimeNanos,loc.getElapsedRealtimeNanos());
     }
 
     public Location result() {
@@ -96,22 +92,15 @@ public class WeightedAverage {
 
         location.setTime(timeMs);
         if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
+            location.setElapsedRealtimeNanos(mElapsedRealtimeNanos);
 
         location.setLatitude(meanLat);
         location.setLongitude(meanLon);
         if (count == 1) {
-            location.setAccuracy(reportAccuracy);
+            location.setAccuracy(accuracyOfLastReport);
         } else {
-            //double varLat = sLat / (wSumLat - 1);
-            //double varLon = sLon / (wSumLon - 1);
-            double varLat = sLat / (wSumLat - wSum2Lat / wSumLat);
-            double varLon = sLon / (wSumLon - wSum2Lon / wSumLon);
-
-            double sdLat = Math.sqrt(varLat);
-            double sdLon = Math.sqrt(varLon);
-
-            //Log.d(TAG, "result() sLat=" + sLat + ", wSumLat=" + wSumLat + ", wSum2Lat=" + wSum2Lat + ", varLat=" + varLat + ", sdLat=" + sdLat);
+            double sdLat = Math.sqrt(sLat / (wSumLat - wSum2Lat / wSumLat));
+            double sdLon = Math.sqrt(sLon / (wSumLon - wSum2Lon / wSumLon));
 
             double sdMetersLat = sdLat * BackendService.DEG_TO_METER;
             double cosLat = Math.max(BackendService.MIN_COS, Math.cos(Math.toRadians(meanLat)));
