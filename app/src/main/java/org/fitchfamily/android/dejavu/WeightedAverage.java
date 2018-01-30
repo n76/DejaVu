@@ -7,36 +7,63 @@ package org.fitchfamily.android.dejavu;
 import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 
 public class WeightedAverage {
     public static final String TAG="DejaVu wgtAvg";
     public static final float MINIMUM_BELIEVABLE_ACCURACY = 15.0F;
 
-    // Latitude averaging variables
-    private double wSumLat;
-    private double wSum2Lat;
-    private double meanLat;
-    private double sLat;
-
-    // Longitude averaging variables
-    private double wSumLon;
-    private double wSum2Lon;
-    private double meanLon;
-    private double sLon;
-
     private int count;
     private long timeMs;
     private long mElapsedRealtimeNanos;
 
-    private float accuracyOfLastReport;
+    private class simpleWeightedAverage {
+        // See: https://physics.stackexchange.com/a/329412 for details about estimating
+        // error on weighted averages
+        private double wSum;
+        private double wSum2;
+        private double mean;
+        private double sdAccum;
+
+        simpleWeightedAverage() {
+            reset();
+        }
+
+        public void reset() {
+            wSum = wSum2 = mean = sdAccum = 0.0;
+        }
+
+        public void add(double x, double sd, double weight) {
+            wSum = wSum + weight;
+            wSum2 = wSum2 + (weight * weight);
+
+            double oldMean = mean;
+            mean = oldMean + (weight / wSum) * (x - oldMean);
+
+            sdAccum += (weight*weight)*(sd*sd);
+        }
+
+        public double getMean() {
+            return mean;
+        }
+
+        public double getStdDev() {
+            return Math.sqrt((1.0/wSum2)*sdAccum);
+        }
+    }
+
+    simpleWeightedAverage latEst;
+    simpleWeightedAverage lonEst;
 
     WeightedAverage() {
+        latEst = new simpleWeightedAverage();
+        lonEst = new simpleWeightedAverage();
         reset();
     }
 
     public void reset() {
-        wSumLat = wSum2Lat = meanLat = sLat = 0.0;
-        wSumLon = wSum2Lon = meanLon = sLon = 0.0;
+        latEst.reset();
+        lonEst.reset();
 
         count = 0;
         timeMs = 0;
@@ -60,25 +87,22 @@ public class WeightedAverage {
         //
 
         float asu = loc.getExtras().getInt(RfEmitter.LOC_ASU);
-        accuracyOfLastReport = loc.getAccuracy();
-        double weight = asu/ accuracyOfLastReport;
+        double weight = asu/ loc.getAccuracy();
 
         count++;
         //Log.d(TAG,"add() entry: weight="+weight+", count="+count);
 
-        double lat = loc.getLatitude();
-        wSumLat = wSumLat + weight;
-        wSum2Lat = wSum2Lat + (weight * weight);
-        double oldMean = meanLat;
-        meanLat = oldMean + (weight / wSumLat) * (lat - oldMean);
-        sLat = sLat + weight * (lat - oldMean) * (lat - meanLat);
+        //
+        // Our input has an accuracy based on the detection of the edge of the coverage area.
+        // So assume that is a high (two sigma) probability and, worse, assume we can turn that
+        // into normal distribution error statistic. We will assume our standard deviation (one
+        // sigma) is half of our accuracy.
+        //
+        double stdDev = loc.getAccuracy()*BackendService.METER_TO_DEG/2.0;
+        double cosLat = Math.max(BackendService.MIN_COS, Math.cos(Math.toRadians(loc.getLatitude())));
 
-        double lon = loc.getLongitude();
-        wSumLon = wSumLon + weight;
-        wSum2Lon = wSum2Lon + (weight * weight);
-        oldMean = meanLon;
-        meanLon = oldMean + (weight / wSumLon) * (lon - oldMean);
-        sLon = sLon + weight * (lon - oldMean) * (lon - meanLon);
+        latEst.add(loc.getLatitude(),stdDev,weight);
+        lonEst.add(loc.getLongitude(),stdDev*cosLat, weight);
 
         timeMs = Math.max(timeMs,loc.getTime());
         mElapsedRealtimeNanos = Math.max(mElapsedRealtimeNanos,loc.getElapsedRealtimeNanos());
@@ -94,21 +118,20 @@ public class WeightedAverage {
         if (Build.VERSION.SDK_INT >= 17)
             location.setElapsedRealtimeNanos(mElapsedRealtimeNanos);
 
-        location.setLatitude(meanLat);
-        location.setLongitude(meanLon);
-        if (count == 1) {
-            location.setAccuracy(accuracyOfLastReport);
-        } else {
-            double sdLat = Math.sqrt(sLat / (wSumLat - wSum2Lat / wSumLat));
-            double sdLon = Math.sqrt(sLon / (wSumLon - wSum2Lon / wSumLon));
+        location.setLatitude(latEst.getMean());
+        location.setLongitude(lonEst.getMean());
 
-            double sdMetersLat = sdLat * BackendService.DEG_TO_METER;
-            double cosLat = Math.max(BackendService.MIN_COS, Math.cos(Math.toRadians(meanLat)));
-            double sdMetersLon = sdLon * BackendService.DEG_TO_METER * cosLat;
+        //
+        // Accuracy estimate is in degrees, convert to meters for output.
+        // We calculate North-South and East-West independently, convert to a
+        // circular radius by finding the length of the diagonal.
+        //
+        double sdMetersLat = latEst.getStdDev() * BackendService.DEG_TO_METER;
+        double cosLat = Math.max(BackendService.MIN_COS, Math.cos(Math.toRadians(latEst.getMean())));
+        double sdMetersLon = lonEst.getStdDev() * BackendService.DEG_TO_METER * cosLat;
 
-            float acc = (float) Math.max(Math.sqrt((sdMetersLat*sdMetersLat)+(sdMetersLon*sdMetersLon)),MINIMUM_BELIEVABLE_ACCURACY);
-            location.setAccuracy(acc);
-        }
+        float acc = (float) Math.max(Math.sqrt((sdMetersLat*sdMetersLat)+(sdMetersLon*sdMetersLon)),MINIMUM_BELIEVABLE_ACCURACY);
+        location.setAccuracy(acc);
 
         Bundle extras = new Bundle();
         extras.putLong("AVERAGED_OF", count);
