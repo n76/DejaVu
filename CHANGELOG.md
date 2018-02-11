@@ -14,7 +14,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 - Not applicable
 
-## [1.1.1] -2018-01-30
+## [1.1.2] - 2018-02-11
+
+### Changed
+- Fix typo in Polish strings
+
+## [1.1.1] - 2018-01-30
 ### Changed
 - Refactor/clean up logic flow and position computation.
 
