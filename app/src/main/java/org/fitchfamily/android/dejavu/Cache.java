@@ -96,10 +96,10 @@ public class Cache {
     public RfEmitter get(RfIdentification id) {
         if (id == null)
             return null;
-        if (db == null)
-            return null;
 
         synchronized (this) {
+            if (db == null)
+                return null;
             String key = id.toString();
             RfEmitter rslt = workingSet.get(key);
             if (rslt == null) {
