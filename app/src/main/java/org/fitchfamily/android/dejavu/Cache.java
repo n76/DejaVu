@@ -132,6 +132,8 @@ public class Cache {
      */
     public void sync() {
         synchronized (this) {
+            if (db == null)
+                return;
             boolean doSync = false;
 
             // Scan all of our emitters to see
@@ -173,6 +175,8 @@ public class Cache {
 
     public HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
         synchronized (this) {
+            if (db == null)
+                return null;
             return db.getEmitters(rfType, bb);
         }
     }
