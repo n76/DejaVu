@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 - Not applicable
 
+## [1.1.4] - 2018-03-12
+### Added
+- German Translation
+
 ## [1.1.3] - 2018-02-27
 
 ### Changed
