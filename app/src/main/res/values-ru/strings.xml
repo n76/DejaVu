@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Служба местоположения Déjà Vu</string>
+    <string name="summary">Геолокация по персональной локальной базе WiFi- и GSM-передатчиков</string>
+</resources>
