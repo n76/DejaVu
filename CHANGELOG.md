@@ -14,9 +14,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 - Not applicable
 
+## [1.1.5] - 2018-03-19
+### Added
+- Russian Translation. Thanks to @bboa
+
 ## [1.1.4] - 2018-03-12
 ### Added
-- German Translation
+- German Translation. Thanks to @levush
 
 ## [1.1.3] - 2018-02-27
 
@@ -26,7 +30,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [1.1.2] - 2018-02-11
 
 ### Changed
-- Fix typo in Polish strings
+- Fix typo in Polish strings. Thanks to @verdulo
 
 ## [1.1.1] - 2018-01-30
 ### Changed
