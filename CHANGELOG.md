@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Not applicable
+- Build specification to reduce size of released application.
 
 ### Removed
 - Not applicable
