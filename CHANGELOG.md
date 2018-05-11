@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 - Build specification to reduce size of released application.
+- Update build environment
 
 ### Removed
 - Not applicable
