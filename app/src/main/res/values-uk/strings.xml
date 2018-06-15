@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Сервіс позиціювання Déjà Vu</string>
+    <string name="summary">Сервіс позиціювання для microG/UnifiedNlp, який використовую локальну базу даних джерел радіовипромінювання</string>
+</resources>
