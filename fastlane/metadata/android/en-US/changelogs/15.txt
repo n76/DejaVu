@@ -1,0 +1,3 @@
+- Build specification to reduce size of released application.
+- Update build environment
+- Add Ukrainian translation

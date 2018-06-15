@@ -1,0 +1,1 @@
+The µg Project at https://github.com/microg has a unified network location provider that accepts backends for the actual location lookup. This is a backend that uses locally acquired WiFi AP data to resolve user location.

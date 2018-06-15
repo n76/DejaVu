@@ -1,0 +1,7 @@
+The µg Project at https://github.com/microg has a unified network location provider that accepts backends for the actual location lookup. This backend that uses locally acquired WiFi AP data to resolve user location.
+
+This backend consists of two parts sharing a common database. One part passively monitors the GPS. If the GPS has acquired and has a good position accuracy, then the WiFi APs detected by the phone are stored.
+
+The other part is the actual location provider which uses the database to estimate location when the GPS is not available. The use of stored WiFi AP can decrease the GPS time to first fix and allows apps to get an immediate approximate location.
+
+This backend uses no network data. All data acquired by the phone stays on the phone and no queries are made to a centralized WiFi AP location provider.
