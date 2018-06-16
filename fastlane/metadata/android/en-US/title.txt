@@ -1,1 +1,1 @@
-Déjá Vu - A Local RF Based Backend
+Déjá Vu - A local RF based back end for the µg Project
