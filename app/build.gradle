@@ -8,7 +8,7 @@ android {
         minSdkVersion 18
         targetSdkVersion 25
         versionCode 15
-        versionName "1.1.6rc"
+        versionName "1.1.6"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -24,6 +24,6 @@ android {
 
 dependencies {
     api fileTree(dir: 'libs', include: ['*.jar'])
-    api 'com.android.support:appcompat-v7:25.3.1'
+    api 'com.android.support:appcompat-v7:25.4.0'
     api 'org.microg:unifiednlp-api:1.5.3'
 }

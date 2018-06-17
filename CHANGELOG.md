@@ -9,12 +9,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Build specification to reduce size of released application.
-- Update build environment
-- Add Ukrainian translation
+- Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.1.6] - 2018-06-17
+### Added
+- Add Ukrainian translation
+
+### Changed
+- Build specification to reduce size of released application.
+- Update build environment
 
 ## [1.1.5] - 2018-03-19
 ### Added
