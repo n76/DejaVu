@@ -919,10 +919,14 @@ public class BackendService extends LocationBackendService {
         // Increment the trust of the emitters we've seen and decrement the trust
         // of the emitters we expected to see but didn't.
 
-        for (RfIdentification id : seenSet) {
-            RfEmitter e = emitterCache.get(id);
-            if (e != null)
-                e.incrementTrust();
+        if (seenSet != null) {
+            for (RfIdentification id : seenSet) {
+                if (id != null) {
+                    RfEmitter e = emitterCache.get(id);
+                    if (e != null)
+                        e.incrementTrust();
+                }
+            }
         }
 
         // If we are dealing with very movable emitters, then try to detect ones that
