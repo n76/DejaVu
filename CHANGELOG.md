@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 - Not applicable
 
+## [1.1.7] - 2018-06-18
+### Changed
+- Fix crash on empty set of seen emitters.
+- Fix some Lint identified items.
+
 ## [1.1.6] - 2018-06-17
 ### Added
 - Add Ukrainian translation
