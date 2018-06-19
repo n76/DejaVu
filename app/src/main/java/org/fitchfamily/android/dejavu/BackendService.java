@@ -110,6 +110,7 @@ public class BackendService extends LocationBackendService {
     // We use a threads for potentially slow operations.
     private Thread mobileThread;
     private Thread backgroundThread;
+    private boolean wifiScanInprogress;
 
     private TelephonyManager tm;
 
@@ -146,7 +147,7 @@ public class BackendService extends LocationBackendService {
     // So these numbers are the minimum time. Actual will be at least that based
     // on when we get GPS locations and/or update requests from microG/UnifiedNlp.
     //
-    private final static long REPORTING_INTERVAL   = 3600;                          // in milliseconds
+    private final static long REPORTING_INTERVAL   = 2700;                          // in milliseconds
     private final static long MOBILE_SCAN_INTERVAL = REPORTING_INTERVAL/2 - 100;    // in milliseconds
     private final static long WLAN_SCAN_INTERVAL   = REPORTING_INTERVAL/3 - 100;    // in milliseconds
 
@@ -196,6 +197,7 @@ public class BackendService extends LocationBackendService {
         nextMobileScanTime = 0;
         nextWlanScanTime = 0;
         wifiBroadcastReceiverRegistered = false;
+        wifiScanInprogress = false;
 
         if (emitterCache == null)
             emitterCache = new Cache(this);
@@ -220,7 +222,7 @@ public class BackendService extends LocationBackendService {
      * Closing down, release our dynamic resources.
      */
     @Override
-    protected void onClose() {
+    protected synchronized void onClose() {
         super.onClose();
         Log.d(TAG, "onClose()");
         if (wifiBroadcastReceiverRegistered) {
@@ -355,13 +357,14 @@ public class BackendService extends LocationBackendService {
             return;
         nextWlanScanTime = currentProcessTime + WLAN_SCAN_INTERVAL;
 
-        //Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
         if (wm == null) {
             wm = (WifiManager) this.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         }
-        if (wm != null) {
+        if ((wm != null)  && !wifiScanInprogress) {
             if (wm.isWifiEnabled() ||
                     ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) && wm.isScanAlwaysAvailable())) {
+                //Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
+                wifiScanInprogress = true;
                 wm.startScan();
             }
         }
@@ -628,7 +631,7 @@ public class BackendService extends LocationBackendService {
      * Call back method entered when Android has completed a scan for WiFi emitters in
      * the area.
      */
-    private void onWiFisChanged() {
+    private synchronized void onWiFisChanged() {
         if ((wm != null) && (emitterCache != null)) {
             List<ScanResult> scanResults = wm.getScanResults();
             Set<Observation> observations = new HashSet<>();
@@ -647,6 +650,7 @@ public class BackendService extends LocationBackendService {
                 queueForProcessing(observations, RfEmitter.EmitterType.WLAN, System.currentTimeMillis());
             }
         }
+        wifiScanInprogress = false;
     }
 
     /**
@@ -729,12 +733,10 @@ public class BackendService extends LocationBackendService {
         // Check for the end of our collection period. If we are in a new period
         // then finish off the processing for the previous period.
         long currentProcessTime = System.currentTimeMillis();
-        if (currentProcessTime < nextReportTime)
-            return;
-        nextReportTime += REPORTING_INTERVAL;
-        if (nextReportTime <= currentProcessTime)
+        if (currentProcessTime >= nextReportTime) {
             nextReportTime = currentProcessTime + REPORTING_INTERVAL;
-        endOfPeriodProcessing();
+            endOfPeriodProcessing();
+        }
     }
 
     /**

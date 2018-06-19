@@ -59,7 +59,7 @@ public class RfEmitter {
     private static final long KM = METERS * 1000;
 
     private static final long MINIMUM_TRUST = 0;
-    private static final long REQUIRED_TRUST = 30;
+    private static final long REQUIRED_TRUST = 48;
     private static final long MAXIMUM_TRUST = 100;
 
     // Tag/names for additional information on location records

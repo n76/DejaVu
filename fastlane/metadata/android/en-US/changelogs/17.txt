@@ -1,0 +1,2 @@
+- Fix timing related crash on start up/shut down
+- Revisions to better support external GPS with faster report rates.

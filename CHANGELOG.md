@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Not applicable
+- Fix timing related crash on start up/shut down
+- Revisions to better support external GPS with faster report rates.
 
 ### Removed
 - Not applicable
