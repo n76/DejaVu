@@ -72,6 +72,7 @@ public class BackendService extends LocationBackendService {
     private static final String TAG = "DejaVu Backend";
 
     public static final String LOCATION_PROVIDER = "DejaVu";
+    private final boolean DEBUG = false;
 
     private static final
             String[] myPerms = new String[]{
@@ -134,8 +135,8 @@ public class BackendService extends LocationBackendService {
     // periodically adjust the trust. Ones we've seen we increment, ones we expected
     // to see but didn't we decrement.
     //
-    Set<RfIdentification> seenSet;
-    Cache emitterCache;
+    private Set<RfIdentification> seenSet;
+    private Cache emitterCache;
 
     //
     // Scanning and reporting are resource intensive operations, so we throttle
@@ -159,10 +160,10 @@ public class BackendService extends LocationBackendService {
     // a single server pull and process the information.
     //
     private class WorkItem {
-        public Collection<Observation> observations;
-        public RfEmitter.EmitterType rfType;
-        public Location loc;
-        public long time;
+        Collection<Observation> observations;
+        RfEmitter.EmitterType rfType;
+        Location loc;
+        long time;
 
         WorkItem(Collection<Observation> o, RfEmitter.EmitterType tp, Location l, long tm) {
             observations = o;
@@ -171,7 +172,7 @@ public class BackendService extends LocationBackendService {
             time = tm;
         }
     }
-    Queue<WorkItem> workQueue = new ConcurrentLinkedQueue<WorkItem>();
+    private Queue<WorkItem> workQueue = new ConcurrentLinkedQueue<>();
 
     //
     // Overrides of inherited methods
@@ -248,7 +249,7 @@ public class BackendService extends LocationBackendService {
     protected Intent getInitIntent() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // Build list of permissions we need but have not been granted
-            List<String> perms = new LinkedList<String>();
+            List<String> perms = new LinkedList<>();
             for (String s : myPerms) {
                 if (checkSelfPermission(s) != PackageManager.PERMISSION_GRANTED)
                     perms.add(s);
@@ -358,9 +359,11 @@ public class BackendService extends LocationBackendService {
         if (wm == null) {
             wm = (WifiManager) this.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         }
-        if (wm.isWifiEnabled() ||
-                ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) && wm.isScanAlwaysAvailable())) {
-            wm.startScan();
+        if (wm != null) {
+            if (wm.isWifiEnabled() ||
+                    ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) && wm.isScanAlwaysAvailable())) {
+                wm.startScan();
+            }
         }
     }
 
@@ -453,7 +456,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): LTE Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): LTE Cell Identity has unknown values: " + id.toString());
                     }
                 } else if (inputCellInfo instanceof CellInfoGsm) {
                     CellInfoGsm info = (CellInfoGsm) inputCellInfo;
@@ -471,7 +475,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): GSM Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): GSM Cell Identity has unknown values: " + id.toString());
                     }
                 } else if (inputCellInfo instanceof CellInfoWcdma) {
                     CellInfoWcdma info = (CellInfoWcdma) inputCellInfo;
@@ -489,7 +494,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): WCDMA Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): WCDMA Cell Identity has unknown values: " + id.toString());
                     }
                 } else if (inputCellInfo instanceof CellInfoCdma) {
                     CellInfoCdma info = (CellInfoCdma) inputCellInfo;
@@ -506,7 +512,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): CDMA Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): CDMA Cell Identity has unknown values: " + id.toString());
                     }
                 } else {
                     Log.d(TAG, "getMobileTowers(): Unsupported Cell type:  "+ inputCellInfo.toString());
@@ -535,8 +542,8 @@ public class BackendService extends LocationBackendService {
             // Log.d(TAG, "deprecatedGetMobileTowers(): mncString is NULL or not recognized.");
             return observations;
         }
-        int mcc = 0;
-        int mnc = 0;
+        int mcc;
+        int mnc;
         try {
             mcc = Integer.parseInt(mncString.substring(0, 3));
             mnc = Integer.parseInt(mncString.substring(3));
@@ -558,7 +565,8 @@ public class BackendService extends LocationBackendService {
             observations.add(o);
 
         } else {
-            // Log.d(TAG, "deprecatedGetMobileTowers(): getCellLocation() returned null or not GsmCellLocation.");
+            if (DEBUG)
+                Log.d(TAG, "deprecatedGetMobileTowers(): getCellLocation() returned null or not GsmCellLocation.");
         }
         try {
             final List<NeighboringCellInfo> neighbors = tm.getNeighboringCellInfo();
@@ -575,10 +583,12 @@ public class BackendService extends LocationBackendService {
                     }
                 }
             } else {
-                // Log.d(TAG, "deprecatedGetMobileTowers(): getNeighboringCellInfo() returned null or empty set.");
+                if (DEBUG)
+                    Log.d(TAG, "deprecatedGetMobileTowers(): getNeighboringCellInfo() returned null or empty set.");
             }
         } catch (NoSuchMethodError e) {
-            // Log.d(TAG, "deprecatedGetMobileTowers(): no such method: getNeighboringCellInfo().");
+            if (DEBUG)
+                Log.d(TAG, "deprecatedGetMobileTowers(): no such method: getNeighboringCellInfo().");
         }
         return observations;
     }
@@ -621,7 +631,7 @@ public class BackendService extends LocationBackendService {
     private void onWiFisChanged() {
         if ((wm != null) && (emitterCache != null)) {
             List<ScanResult> scanResults = wm.getScanResults();
-            Set<Observation> observations = new HashSet<Observation>();
+            Set<Observation> observations = new HashSet<>();
             for (ScanResult sr : scanResults) {
                 String bssid = sr.BSSID.toLowerCase(Locale.US).replace(".", ":");
                 if (bssid != null) {
@@ -694,7 +704,7 @@ public class BackendService extends LocationBackendService {
             return;
 
         if (seenSet == null)
-            seenSet = new HashSet<RfIdentification>();
+            seenSet = new HashSet<>();
 
         Collection<RfEmitter> emitters = new HashSet<>();
 
@@ -813,7 +823,7 @@ public class BackendService extends LocationBackendService {
     private Set<Location> culledEmitters(Collection<Location> locations) {
         Set<Set<Location>> locationGroups = divideInGroups(locations);
 
-        List<Set<Location>> clsList = new ArrayList<Set<Location>>(locationGroups);
+        List<Set<Location>> clsList = new ArrayList<>(locationGroups);
         Collections.sort(clsList, new Comparator<Set<Location>>() {
             @Override
             public int compare(Set<Location> lhs, Set<Location> rhs) {
@@ -827,9 +837,9 @@ public class BackendService extends LocationBackendService {
             // Determine minimum count for a valid group of emitters.
             // The RfEmitter class will have put the min count into the location
             // it provided.
-            Long reqdCount = 99999l;            // Some impossibly big number
+            Long reqdCount = 99999L;            // Some impossibly big number
             for (Location l : rslt) {
-                reqdCount = Math.min(l.getExtras().getLong(RfEmitter.LOC_MIN_COUNT,9999l),reqdCount);
+                reqdCount = Math.min(l.getExtras().getLong(RfEmitter.LOC_MIN_COUNT,9999L),reqdCount);
             }
             //Log.d(TAG,"culledEmitters() reqdCount="+reqdCount+", size="+rslt.size());
             if (rslt.size() >= reqdCount)
@@ -850,11 +860,11 @@ public class BackendService extends LocationBackendService {
      */
     private Set<Set<Location>> divideInGroups(Collection<Location> locations) {
 
-        Set<Set<Location>> bins = new HashSet<Set<Location>>();
+        Set<Set<Location>> bins = new HashSet<>();
 
         // Create a bins
         for (Location location : locations) {
-            Set<Location> locGroup = new HashSet<Location>();
+            Set<Location> locGroup = new HashSet<>();
             locGroup.add(location);
             bins.add(locGroup);
         }
@@ -934,7 +944,7 @@ public class BackendService extends LocationBackendService {
         // that we expected to see in this area based on the GPS and our own location
         // computation.
 
-        Set<RfIdentification> expectedSet = new HashSet<RfIdentification >();
+        Set<RfIdentification> expectedSet = new HashSet<>();
         if (weightedAverageLocation != null) {
             emitterCache.sync();        // getExpected() ends bypassing the cache, so sync first
 
@@ -956,7 +966,7 @@ public class BackendService extends LocationBackendService {
         // Sync all of our changes to the on flash database and reset the RF emitters we've seen.
 
         emitterCache.sync();
-        seenSet = new HashSet<RfIdentification>();
+        seenSet = new HashSet<>();
     }
 
     /**
@@ -973,7 +983,7 @@ public class BackendService extends LocationBackendService {
     private Set<RfIdentification> getExpected(Location loc, RfEmitter.EmitterType rfType) {
         RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(rfType);
         if ((loc == null) || (loc.getAccuracy() > rfChar.typicalRange))
-            return new HashSet<RfIdentification >();;
+            return new HashSet<>();
         BoundingBox bb = new BoundingBox(loc.getLatitude(), loc.getLongitude(), rfChar.typicalRange);
         return emitterCache.getEmitters(rfType, bb);
     }

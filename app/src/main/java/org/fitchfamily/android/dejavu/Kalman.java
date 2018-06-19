@@ -54,7 +54,6 @@ package org.fitchfamily.android.dejavu;
  */
 
 import android.location.Location;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 
@@ -63,7 +62,7 @@ import android.os.SystemClock;
  * measurements. We cheat and use two one dimensional Kalman filters which works
  * because our two dimensions are orthogonal.
  */
-public class Kalman {
+class Kalman {
     private static final double ALTITUDE_NOISE = 10.0;
 
     private static final float MOVING_THRESHOLD = 0.7f;     // meters/sec (2.5 kph ~= 0.7 m/s)
@@ -72,8 +71,8 @@ public class Kalman {
     /**
      * Three 1-dimension trackers, since the dimensions are independent and can avoid using matrices.
      */
-    private Kalman1Dim mLatTracker;
-    private Kalman1Dim mLonTracker;
+    private final Kalman1Dim mLatTracker;
+    private final Kalman1Dim mLonTracker;
     private Kalman1Dim mAltTracker;
 
     /**
@@ -115,7 +114,6 @@ public class Kalman {
         mLonTracker.setState(position, 0.0, noise);
 
         // Altitude
-        position = 0.0;
         if (location.hasAltitude()) {
             position = location.getAltitude();
             noise = accuracy;
@@ -162,7 +160,7 @@ public class Kalman {
         }
     }
 
-    public synchronized void predict(long timeMs) {
+    private synchronized void predict(long timeMs) {
         mLatTracker.predict(0.0, timeMs);
         mLonTracker.predict(0.0, timeMs);
         if (mAltTracker != null)
@@ -185,8 +183,7 @@ public class Kalman {
 
         predict(timeMs);
         location.setTime(timeMs);
-        if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
+        location.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
         location.setLatitude(mLatTracker.getPosition());
         location.setLongitude(mLonTracker.getPosition());
         if (mAltTracker != null)

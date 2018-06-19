@@ -48,7 +48,7 @@ public class GpsMonitor extends Service implements LocationListener {
     private static final int GPS_SAMPLE_TIME = 0;
     private static final float GSP_SAMPLE_DISTANCE = 0;
 
-    protected LocationManager lm;
+    private LocationManager lm;
     private boolean monitoring = false;
 
     @Nullable
@@ -64,14 +64,19 @@ public class GpsMonitor extends Service implements LocationListener {
     public void onCreate() {
         Log.d(TAG, "onCreate()");
         lm = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
-        try {
-            lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
-                    GPS_SAMPLE_TIME,
-                    GSP_SAMPLE_DISTANCE,
-                    this);
-            monitoring = true;
-        } catch (SecurityException ex) {
-            Log.w(TAG, "onCreate() failed: ", ex);
+        if (lm != null) {
+            try {
+                lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
+                        GPS_SAMPLE_TIME,
+                        GSP_SAMPLE_DISTANCE,
+                        this);
+                monitoring = true;
+            } catch (SecurityException ex) {
+                Log.w(TAG, "onCreate() failed: ", ex);
+                monitoring = false;
+            }
+        } else {
+            Log.w(TAG, "onCreate() lm is null.");
             monitoring = false;
         }
     }
@@ -103,8 +108,6 @@ public class GpsMonitor extends Service implements LocationListener {
         // Log.d(TAG, "onLocationChanged()");
         if (location.getProvider().equals("gps")) {
             BackendService.instanceGpsLocationUpdated(location);
-        } else {
-            // Log.d(TAG, "Ignoring position from \""+location.getProvider()+"\"");
         }
     }
 

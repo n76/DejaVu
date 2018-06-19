@@ -24,7 +24,6 @@ package org.fitchfamily.android.dejavu;
  */
 
 import android.location.Location;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -77,17 +76,17 @@ public class RfEmitter {
         STATUS_CHANGED,             // In database but something has changed
         STATUS_CACHED,              // In database no changes pending
         STATUS_BLACKLISTED          // Has been blacklisted
-    };
+    }
 
     public static class RfCharacteristics {
-        public float reqdGpsAccuracy;       // GPS accuracy needed in meters
-        public float minimumRange;          // Minimum believable coverage radius in meters
-        public float typicalRange;          // Typical range expected
-        public float moveDetectDistance;    // Maximum believable coverage radius in meters
-        public long discoveryTrust;         // Assumed trustiness of a rust an emitter seen for the first time.
-        public long incrTrust;              // Amount to increase trust
-        public long decrTrust;              // Amount to decrease trust
-        public long minCount;               // Minimum number of emitters before we can estimate location
+        public final float reqdGpsAccuracy;       // GPS accuracy needed in meters
+        public final float minimumRange;          // Minimum believable coverage radius in meters
+        public final float typicalRange;          // Typical range expected
+        public final float moveDetectDistance;    // Maximum believable coverage radius in meters
+        public final long discoveryTrust;         // Assumed trustiness of a rust an emitter seen for the first time.
+        public final long incrTrust;              // Amount to increase trust
+        public final long decrTrust;              // Amount to decrease trust
+        public final long minCount;               // Minimum number of emitters before we can estimate location
 
         RfCharacteristics( float gps,
                            float min,
@@ -163,9 +162,9 @@ public class RfEmitter {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof RfEmitter)) return false;
+        if (!(o instanceof RfIdentification)) return false;
 
-        RfEmitter e = (RfEmitter) o;
+        RfIdentification e = (RfIdentification) o;
         return getRfIdent().equals(e);
     }
 
@@ -246,7 +245,7 @@ public class RfEmitter {
     }
 
     public void setNote(String n) {
-        if (note != n) {
+        if (!note.equals(n)) {
             note = n;
             if (blacklistEmitter())
                 changeStatus(EmitterStatus.STATUS_BLACKLISTED, "initSelf()");
@@ -514,8 +513,7 @@ public class RfEmitter {
 
         // Time tags based on time of most recent observation
         location.setTime(mLastObservation.getLastUpdateTimeMs());
-        if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(mLastObservation.getElapsedRealtimeNanos());
+        location.setElapsedRealtimeNanos(mLastObservation.getElapsedRealtimeNanos());
 
         Bundle extras = new Bundle();
         extras.putString(LOC_RF_TYPE, type.toString());

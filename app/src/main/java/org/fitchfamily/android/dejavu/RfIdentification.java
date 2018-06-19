@@ -25,6 +25,8 @@ package org.fitchfamily.android.dejavu;
 
 import org.fitchfamily.android.dejavu.RfEmitter.EmitterType;
 
+import android.support.annotation.NonNull;
+
 /**
  * This class forms a complete identification for a RF emitter.
  *
@@ -34,15 +36,15 @@ import org.fitchfamily.android.dejavu.RfEmitter.EmitterType;
  */
 
 public class RfIdentification implements Comparable<RfIdentification>{
-    private String rfId;
-    private EmitterType rfType;
+    private final String rfId;
+    private final EmitterType rfType;
 
     RfIdentification(String id, EmitterType t) {
         rfId = id;
         rfType = t;
     }
 
-    public int compareTo(RfIdentification o) {
+    public int compareTo(@NonNull RfIdentification o) {
         int rslt = o.rfType.ordinal() - rfType.ordinal();
         if (rslt == 0)
             rslt = rfId.compareTo(o.rfId);

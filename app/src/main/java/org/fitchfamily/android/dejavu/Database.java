@@ -37,7 +37,7 @@ import java.util.HashSet;
  * thread safe. However all access to the database is through the Cache object
  * which is thread safe.
  */
-public class Database extends SQLiteOpenHelper {
+class Database extends SQLiteOpenHelper {
     private static final String TAG = "DejaVu DB";
 
     private static final int VERSION = 2;
@@ -277,7 +277,7 @@ public class Database extends SQLiteOpenHelper {
      * @return A collection of RF emitter identifications
      */
     public HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
-        HashSet<RfIdentification> rslt = new HashSet<RfIdentification>();
+        HashSet<RfIdentification> rslt = new HashSet<>();
         String query = "SELECT " +
                 COL_RFID + " " +
                 " FROM " + TABLE_SAMPLES +
@@ -331,8 +331,8 @@ public class Database extends SQLiteOpenHelper {
                 rslt = new RfEmitter(ident);
                 EmitterInfo ei = new EmitterInfo();
                 ei.trust = (int) cursor.getLong(1);
-                ei.latitude = (double) cursor.getDouble(2);
-                ei.longitude = (double) cursor.getDouble(3);
+                ei.latitude = cursor.getDouble(2);
+                ei.longitude = cursor.getDouble(3);
                 ei.radius_ns = (float) cursor.getDouble(4);
                 ei.radius_ew = (float) cursor.getDouble(5);
                 ei.note = cursor.getString(6);

@@ -24,7 +24,7 @@ package org.fitchfamily.android.dejavu;
 
 import android.location.Location;
 
-public class BoundingBox {
+class BoundingBox {
     private double north;
     private double south;
     private double east;
@@ -59,7 +59,7 @@ public class BoundingBox {
      * implied by a location.
      * @param loc A record describing the coverage of an RF emitter.
      */
-    public boolean update(Location loc) {
+    private boolean update(Location loc) {
         return update(loc.getLatitude(), loc.getLongitude(), loc.getAccuracy());
     }
 
@@ -71,7 +71,7 @@ public class BoundingBox {
      * @param lon The center longitude for the coverage area.
      * @param radius The radius of the coverage area.
      */
-    public boolean update(double lat, double lon, float radius) {
+    private boolean update(double lat, double lon, float radius) {
         return update(lat, lon, radius, radius);
     }
 
@@ -84,7 +84,7 @@ public class BoundingBox {
      * @param radius_ns The distance from the center to the north (or south) edge.
      * @param radius_ew The distance from the center to the east (or west) edge.
      */
-    public boolean update(double lat, double lon, float radius_ns, float radius_ew) {
+    private boolean update(double lat, double lon, float radius_ns, float radius_ew) {
         double locNorth = lat + (radius_ns * BackendService.METER_TO_DEG);
         double locSouth = lat - (radius_ns * BackendService.METER_TO_DEG);
         double cosLat = Math.cos(Math.toRadians(lat));

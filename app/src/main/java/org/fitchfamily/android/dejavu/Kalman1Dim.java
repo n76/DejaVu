@@ -51,7 +51,7 @@ package org.fitchfamily.android.dejavu;
  */
 
 
-public class Kalman1Dim {
+class Kalman1Dim {
     private final static double TIME_SECOND = 1000.0;   // One second in milliseconds
 
     /**
@@ -62,11 +62,6 @@ public class Kalman1Dim {
      *
      */
     private final static long TIME_STEP_MS = 150;
-
-    /**
-     * Process noise assumed for this filter
-     */
-    private final double mProcessNoise;
 
     /**
      * Last prediction time
@@ -101,12 +96,11 @@ public class Kalman1Dim {
      * @param timeMillisec The time the filter is started.
      */
     public Kalman1Dim(double processNoise, long timeMillisec) {
-        mProcessNoise = processNoise;
+        double mProcessNoise = processNoise;
 
         mPredTime = timeMillisec;
 
-        double timeStep = ((double)TIME_STEP_MS) / TIME_SECOND;
-        mt = timeStep;
+        mt = ((double)TIME_STEP_MS) / TIME_SECOND;
         mt2 = mt * mt;
         mt2d2 = mt2 / 2.0;
         mt3d2 = mt2 * mt / 2.0;
