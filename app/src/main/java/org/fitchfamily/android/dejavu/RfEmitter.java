@@ -171,7 +171,7 @@ public class RfEmitter {
     /**
      * Hash code is used to determine unique objects. Our "uniqueness" is
      * based on which "real life" RF emitter we model, not our current
-     * coverage, etd. So our hash code should be the same as the hash
+     * coverage, etc. So our hash code should be the same as the hash
      * code of our identification.
      *
      * @return A hash code for this object.
@@ -358,11 +358,17 @@ public class RfEmitter {
     public static RfCharacteristics getRfCharacteristics(EmitterType t) {
         switch (t) {
             case WLAN:
+                // For 2.4 GHz, indoor range seems to be described as about 46 meters
+                // with outdoor range about 90 meters. Set the minimum range to be about
+                // 3/4 of the indoor range and the typical range somewhere between
+                // the indoor and outdoor ranges.
+                // However we've seem really, really long range detection in rural areas
+                // so base the move distance on that.
                 return new RfCharacteristics(
                         20 * METERS,        // reqdGpsAccuracy
-                        50 * METERS,        // minimumRange
-                        150 * METERS,       // typicalRange
-                        1*KM,               // moveDetectDistance - Seen pretty long detection in very rural areas
+                        35 * METERS,        // minimumRange
+                        65 * METERS,       // typicalRange
+                        300 * METERS,       // moveDetectDistance - Seen pretty long detection in very rural areas
                         0,                  // discoveryTrust
                         REQUIRED_TRUST/3,   // incrTrust
                         1,                  // decrTrust
@@ -374,7 +380,7 @@ public class RfEmitter {
                         100 * METERS,       // reqdGpsAccuracy
                         500 * METERS,       // minimumRange
                         2 * KM,             // typicalRange
-                        100 * KM,           // moveDetectDistance - In the desert there towers cover large areas
+                        100 * KM,           // moveDetectDistance - In the desert towers cover large areas
                         MAXIMUM_TRUST,      // discoveryTrust
                         MAXIMUM_TRUST,      // incrTrust
                         0,                  // decrTrust
