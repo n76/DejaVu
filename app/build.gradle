@@ -1,12 +1,12 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 25
+    compileSdkVersion 27
     buildToolsVersion '27.0.3'
     defaultConfig {
         applicationId "org.fitchfamily.android.dejavu"
         minSdkVersion 18
-        targetSdkVersion 25
+        targetSdkVersion 27
         versionCode 16
         versionName "1.1.7"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -24,6 +24,6 @@ android {
 
 dependencies {
     api fileTree(dir: 'libs', include: ['*.jar'])
-    api 'com.android.support:appcompat-v7:25.4.0'
-    api 'org.microg:unifiednlp-api:1.5.3'
+    api 'com.android.support:appcompat-v7:27.1.1'
+    api 'org.microg:unifiednlp-api:1.5.6'
 }

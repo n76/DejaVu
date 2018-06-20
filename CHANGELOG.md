@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 - Fix timing related crash on start up/shut down
 - Revisions to better support external GPS with faster report rates.
+- Updated build tools and target API version
 
 ### Removed
 - Not applicable
