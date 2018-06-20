@@ -162,13 +162,11 @@ public class BackendService extends LocationBackendService {
     //
     private class WorkItem {
         Collection<Observation> observations;
-        RfEmitter.EmitterType rfType;
         Location loc;
         long time;
 
-        WorkItem(Collection<Observation> o, RfEmitter.EmitterType tp, Location l, long tm) {
+        WorkItem(Collection<Observation> o, Location l, long tm) {
             observations = o;
-            rfType = tp;
             loc = l;
             time = tm;
         }
@@ -411,7 +409,7 @@ public class BackendService extends LocationBackendService {
 
         if (observations.size() > 0) {
             // Log.d(TAG,"scanMobile() " + observations.size() + " records to be queued for processing.");
-            queueForProcessing(observations, RfEmitter.EmitterType.MOBILE, System.currentTimeMillis());
+            queueForProcessing(observations, System.currentTimeMillis());
         }
     }
 
@@ -637,8 +635,11 @@ public class BackendService extends LocationBackendService {
             Set<Observation> observations = new HashSet<>();
             for (ScanResult sr : scanResults) {
                 String bssid = sr.BSSID.toLowerCase(Locale.US).replace(".", ":");
+                RfEmitter.EmitterType rftype = RfEmitter.EmitterType.WLAN;
+                if (is5GHz(sr.frequency))
+                    rftype = RfEmitter.EmitterType.WLAN_5GHZ;
                 if (bssid != null) {
-                    Observation o = new Observation(bssid, RfEmitter.EmitterType.WLAN);
+                    Observation o = new Observation(bssid, rftype);
 
                     o.setAsu(WifiManager.calculateSignalLevel(sr.level, MAXIMUM_ASU));
                     o.setNote(sr.SSID);
@@ -647,10 +648,19 @@ public class BackendService extends LocationBackendService {
             }
             if (!observations.isEmpty()) {
                 // Log.d(TAG, "onWiFisChanged(): Observations: " + observations.toString());
-                queueForProcessing(observations, RfEmitter.EmitterType.WLAN, System.currentTimeMillis());
+                queueForProcessing(observations, System.currentTimeMillis());
             }
         }
         wifiScanInprogress = false;
+    }
+
+    /**
+     * This seems like it ought to be in ScanResult but I get an unidentified error
+     * @param freq Center frequency of a WLAN
+     * @return True if in the 5GHZ range
+     */
+    static boolean is5GHz(int freq) {
+        return freq > 4900 && freq < 5900;
     }
 
     /**
@@ -658,15 +668,14 @@ public class BackendService extends LocationBackendService {
      * no thread currently exists, start one.
      *
      * @param observations A set of RF emitter observations (all must be of the same type)
-     * @param rft The type of emitter for the observations.
+     * @param timeMs The time the observations were made.
      */
     private synchronized void queueForProcessing(Collection<Observation> observations,
-                                                 RfEmitter.EmitterType rft,
                                                  long timeMs) {
         Location loc = null;
         if (gpsLocation != null)
             loc = gpsLocation.getLocation();
-        WorkItem work = new WorkItem(observations, rft, loc, timeMs);
+        WorkItem work = new WorkItem(observations, loc, timeMs);
         workQueue.offer(work);
 
         if (backgroundThread != null) {
@@ -950,9 +959,13 @@ public class BackendService extends LocationBackendService {
         if (weightedAverageLocation != null) {
             emitterCache.sync();        // getExpected() ends bypassing the cache, so sync first
 
-            expectedSet.addAll(getExpected(weightedAverageLocation, RfEmitter.EmitterType.WLAN));
+            for (RfEmitter.EmitterType etype : RfEmitter.EmitterType.values()) {
+                expectedSet.addAll(getExpected(weightedAverageLocation, etype));
+            }
             if (gpsLocation != null) {
-                expectedSet.addAll(getExpected(gpsLocation.getLocation(), RfEmitter.EmitterType.WLAN));
+                for (RfEmitter.EmitterType etype : RfEmitter.EmitterType.values()) {
+                    expectedSet.addAll(getExpected(gpsLocation.getLocation(), etype));
+                }
             }
         }
 

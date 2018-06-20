@@ -68,7 +68,7 @@ public class RfEmitter {
     public static final String LOC_ASU = "asu";
     public static final String LOC_MIN_COUNT = "minCount";
 
-    public enum EmitterType {WLAN, MOBILE, INVALID}
+    public enum EmitterType {WLAN, MOBILE, WLAN_5GHZ, BLUETOOTH, INVALID}
 
     public enum EmitterStatus {
         STATUS_UNKNOWN,             // Newly discovered emitter, no data for it at all
@@ -194,6 +194,8 @@ public class RfEmitter {
             return EmitterType.MOBILE;
         if (typeStr.equals(EmitterType.WLAN.toString()))
             return EmitterType.WLAN;
+        if (typeStr.equals(EmitterType.WLAN_5GHZ.toString()))
+            return EmitterType.WLAN_5GHZ;
         return EmitterType.INVALID;
     }
 
@@ -369,6 +371,24 @@ public class RfEmitter {
                         35 * METERS,        // minimumRange
                         65 * METERS,       // typicalRange
                         300 * METERS,       // moveDetectDistance - Seen pretty long detection in very rural areas
+                        0,                  // discoveryTrust
+                        REQUIRED_TRUST/3,   // incrTrust
+                        1,                  // decrTrust
+                        2                   // minCount
+                );
+
+            case WLAN_5GHZ:
+                // For 2.4 GHz, indoor range seems to be described as about 46 meters
+                // with outdoor range about 90 meters. Set the minimum range to be about
+                // 3/4 of the indoor range and the typical range somewhere between
+                // the indoor and outdoor ranges.
+                // However we've seem really, really long range detection in rural areas
+                // so base the move distance on that.
+                return new RfCharacteristics(
+                        10 * METERS,        // reqdGpsAccuracy
+                        15 * METERS,        // minimumRange
+                        25 * METERS,       // typicalRange
+                        100 * METERS,       // moveDetectDistance - Seen pretty long detection in very rural areas
                         0,                  // discoveryTrust
                         REQUIRED_TRUST/3,   // incrTrust
                         1,                  // decrTrust
@@ -561,6 +581,7 @@ public class RfEmitter {
     private boolean blacklistEmitter() {
         switch (this.type) {
             case WLAN:
+            case WLAN_5GHZ:
                 return blacklistWifi();
 
             case MOBILE:

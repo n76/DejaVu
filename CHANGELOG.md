@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- Not applicable
+- Initial support for 5 GHz WLAN RF characteristics being different than 2.4 GHz WLAN.
 
 ### Changed
 - Fix timing related crash on start up/shut down

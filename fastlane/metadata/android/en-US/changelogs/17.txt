@@ -1,2 +1,3 @@
 - Fix timing related crash on start up/shut down
 - Revisions to better support external GPS with faster report rates.
+- Initial support for 5 GHz WLAN RF characteristics being different than 2.4 GHz WLAN.
