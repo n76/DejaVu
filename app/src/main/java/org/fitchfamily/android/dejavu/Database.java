@@ -40,11 +40,12 @@ import java.util.HashSet;
 class Database extends SQLiteOpenHelper {
     private static final String TAG = "DejaVu DB";
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final String NAME = "rf.db";
 
     private static final String TABLE_SAMPLES = "emitters";
 
+    private static final String COL_HASH = "rfHash";        // v3 of database
     private static final String COL_TYPE = "rfType";
     private static final String COL_RFID = "rfID";
     private static final String COL_TRUST = "trust";
@@ -52,7 +53,7 @@ class Database extends SQLiteOpenHelper {
     private static final String COL_LON = "longitude";
     private static final String COL_RAD = "radius";          // v1 of database
     private static final String COL_RAD_NS = "radius_ns";    // v2 of database
-    private static final String COL_RAD_EW= "radius_ew";     // v2 of database
+    private static final String COL_RAD_EW = "radius_ew";    // v2 of database
     private static final String COL_NOTE = "note";
 
     private SQLiteDatabase database;
@@ -98,44 +99,120 @@ class Database extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 2) { // upgrade to 2
-            Log.d(TAG, "onUpgrade(): From: "+ oldVersion + " to 2");
-            // Sqlite3 does not support dropping columns so we create a new table with our
-            // current fields and copy the old data into it.
-            db.execSQL("BEGIN TRANSACTION;");
-            db.execSQL("ALTER TABLE " + TABLE_SAMPLES + " RENAME TO " + TABLE_SAMPLES + "_old;");
-            db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_SAMPLES + "(" +
-                    COL_RFID + " STRING PRIMARY KEY, " +
-                    COL_TYPE + " STRING, " +
-                    COL_TRUST + " INTEGER, " +
-                    COL_LAT + " REAL, " +
-                    COL_LON + " REAL, " +
-                    COL_RAD_NS + " REAL, " +
-                    COL_RAD_EW + " REAL, " +
-                    COL_NOTE + " STRING);");
+        if (oldVersion < 2)
+            upGradeToVersion2(db);
+        if (oldVersion < 3)
+            upGradeToVersion3(db);
+    }
 
-            db.execSQL("INSERT INTO " + TABLE_SAMPLES + "(" +
-                    COL_RFID + ", " +
-                    COL_TYPE + ", " +
-                    COL_TRUST + ", " +
-                    COL_LAT + ", " +
-                    COL_LON + ", " +
-                    COL_RAD_NS + ", " +
-                    COL_RAD_EW + ", " +
-                    COL_NOTE +
-                    ") SELECT " +
-                    COL_RFID + ", " +
-                    COL_TYPE + ", " +
-                    COL_TRUST + ", " +
-                    COL_LAT + ", " +
-                    COL_LON + ", " +
-                    COL_RAD + ", " +
-                    COL_RAD + ", " +
-                    COL_NOTE +
-                    " FROM " + TABLE_SAMPLES + "_old;");
-            db.execSQL("DROP TABLE " + TABLE_SAMPLES + "_old;");
-            db.execSQL("COMMIT;");
+    private void upGradeToVersion2(SQLiteDatabase db) {
+        Log.d(TAG, "upGradeToVersion2(): Entry");
+        // Sqlite3 does not support dropping columns so we create a new table with our
+        // current fields and copy the old data into it.
+        db.execSQL("BEGIN TRANSACTION;");
+        db.execSQL("ALTER TABLE " + TABLE_SAMPLES + " RENAME TO " + TABLE_SAMPLES + "_old;");
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_SAMPLES + "(" +
+                COL_RFID + " STRING PRIMARY KEY, " +
+                COL_TYPE + " STRING, " +
+                COL_TRUST + " INTEGER, " +
+                COL_LAT + " REAL, " +
+                COL_LON + " REAL, " +
+                COL_RAD_NS + " REAL, " +
+                COL_RAD_EW + " REAL, " +
+                COL_NOTE + " STRING);");
+
+        db.execSQL("INSERT INTO " + TABLE_SAMPLES + "(" +
+                COL_RFID + ", " +
+                COL_TYPE + ", " +
+                COL_TRUST + ", " +
+                COL_LAT + ", " +
+                COL_LON + ", " +
+                COL_RAD_NS + ", " +
+                COL_RAD_EW + ", " +
+                COL_NOTE +
+                ") SELECT " +
+                COL_RFID + ", " +
+                COL_TYPE + ", " +
+                COL_TRUST + ", " +
+                COL_LAT + ", " +
+                COL_LON + ", " +
+                COL_RAD + ", " +
+                COL_RAD + ", " +
+                COL_NOTE +
+                " FROM " + TABLE_SAMPLES + "_old;");
+        db.execSQL("DROP TABLE " + TABLE_SAMPLES + "_old;");
+        db.execSQL("COMMIT;");
+    }
+
+    private void upGradeToVersion3(SQLiteDatabase db) {
+        Log.d(TAG, "upGradeToVersion3(): Entry");
+
+        // We are changing our key field to a new text field that contains a hash of
+        // of the ID and type. In addition, we are dealing with a Lint complaint about
+        // using a string field where we ought to be using a text field.
+
+        db.execSQL("BEGIN TRANSACTION;");
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_SAMPLES + "_new (" +
+                COL_HASH + " TEXT PRIMARY KEY, " +
+                COL_RFID + " TEXT, " +
+                COL_TYPE + " TEXT, " +
+                COL_TRUST + " INTEGER, " +
+                COL_LAT + " REAL, " +
+                COL_LON + " REAL, " +
+                COL_RAD_NS + " REAL, " +
+                COL_RAD_EW + " REAL, " +
+                COL_NOTE + " TEXT);");
+
+        SQLiteStatement insert = db.compileStatement("INSERT INTO " +
+                TABLE_SAMPLES + "_new("+
+                COL_HASH + ", " +
+                COL_RFID + ", " +
+                COL_TYPE + ", " +
+                COL_TRUST + ", " +
+                COL_LAT + ", " +
+                COL_LON + ", " +
+                COL_RAD_NS + ", " +
+                COL_RAD_EW + ", " +
+                COL_NOTE + ") " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);");
+
+        String query = "SELECT " +
+                COL_RFID+","+COL_TYPE+","+COL_TRUST+","+COL_LAT+","+COL_LON+","+COL_RAD_NS+","+COL_RAD_EW+","+COL_NOTE+" "+
+                "FROM " + TABLE_SAMPLES + ";";
+
+        Cursor cursor = db.rawQuery(query, null);
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    String rfId = cursor.getString(0);
+                    String rftype = cursor.getString(1);
+                    RfIdentification rfid = new RfIdentification(rfId, RfEmitter.typeOf(rftype));
+                    String hash = rfid.hashString();
+
+                    // Log.d(TAG,"upGradeToVersion2(): Updating '"+rfId.toString()+"'");
+
+                    insert.bindString(1, hash);
+                    insert.bindString(2, rfId);
+                    insert.bindString(3, rftype);
+                    insert.bindString(4, cursor.getString(2));
+                    insert.bindString(5, cursor.getString(3));
+                    insert.bindString(6, cursor.getString(4));
+                    insert.bindString(7, cursor.getString(5));
+                    insert.bindString(8, cursor.getString(6));
+                    insert.bindString(9, cursor.getString(7));
+
+                    insert.executeInsert();
+                    insert.clearBindings();
+                } while (cursor.moveToNext());
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
         }
+        db.execSQL("DROP TABLE " + TABLE_SAMPLES + ";");
+        db.execSQL("ALTER TABLE " + TABLE_SAMPLES + "_new RENAME TO " + TABLE_SAMPLES + ";");
+        db.execSQL("COMMIT;");
     }
 
     @Override
@@ -163,6 +240,7 @@ class Database extends SQLiteOpenHelper {
 
         sqlSampleInsert = database.compileStatement("INSERT INTO " +
                 TABLE_SAMPLES + "("+
+                COL_HASH + ", " +
                 COL_RFID + ", " +
                 COL_TYPE + ", " +
                 COL_TRUST + ", " +
@@ -171,7 +249,7 @@ class Database extends SQLiteOpenHelper {
                 COL_RAD_NS + ", " +
                 COL_RAD_EW + ", " +
                 COL_NOTE + ") " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?);");
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
         sqlSampleUpdate = database.compileStatement("UPDATE " +
                 TABLE_SAMPLES + " SET "+
@@ -181,11 +259,11 @@ class Database extends SQLiteOpenHelper {
                 COL_RAD_NS + "=?, " +
                 COL_RAD_EW + "=?, " +
                 COL_NOTE + "=? " +
-                "WHERE " + COL_RFID + "=? AND " + COL_TYPE + "=?;");
+                "WHERE " + COL_HASH + "=?;");
 
         sqlAPdrop = database.compileStatement("DELETE FROM " +
                 TABLE_SAMPLES +
-                " WHERE " + COL_RFID + "=? AND " + COL_TYPE  + "=?;");
+                " WHERE " + COL_HASH + "=?;");
 
         database.beginTransaction();
     }
@@ -218,8 +296,7 @@ class Database extends SQLiteOpenHelper {
     public void drop(RfEmitter emitter) {
         //Log.d(TAG, "Dropping " + emitter.logString() + " from db");
 
-        sqlAPdrop.bindString(1, emitter.getId());
-        sqlAPdrop.bindString(2, emitter.getTypeString());
+        sqlAPdrop.bindString(1, emitter.hashString());
         sqlAPdrop.executeInsert();
         sqlAPdrop.clearBindings();
         updatesMade = true;
@@ -231,15 +308,16 @@ class Database extends SQLiteOpenHelper {
      * @param emitter The emitter to be added.
      */
     public void insert(RfEmitter emitter) {
-        //Log.d(TAG, "Inserting " + emitter.logString() + " into db");
-        sqlSampleInsert.bindString(1, emitter.getId());
-        sqlSampleInsert.bindString(2, String.valueOf(emitter.getType()));
-        sqlSampleInsert.bindString(3, String.valueOf(emitter.getTrust()));
-        sqlSampleInsert.bindString(4, String.valueOf(emitter.getLat()));
-        sqlSampleInsert.bindString(5, String.valueOf(emitter.getLon()));
-        sqlSampleInsert.bindString(6, String.valueOf(emitter.getRadiusNS()));
-        sqlSampleInsert.bindString(7, String.valueOf(emitter.getRadiusEW()));
-        sqlSampleInsert.bindString(8, emitter.getNote());
+        Log.d(TAG, "Inserting " + emitter.logString() + " into db");
+        sqlSampleInsert.bindString(1, emitter.hashString());
+        sqlSampleInsert.bindString(2, emitter.getId());
+        sqlSampleInsert.bindString(3, String.valueOf(emitter.getType()));
+        sqlSampleInsert.bindString(4, String.valueOf(emitter.getTrust()));
+        sqlSampleInsert.bindString(5, String.valueOf(emitter.getLat()));
+        sqlSampleInsert.bindString(6, String.valueOf(emitter.getLon()));
+        sqlSampleInsert.bindString(7, String.valueOf(emitter.getRadiusNS()));
+        sqlSampleInsert.bindString(8, String.valueOf(emitter.getRadiusEW()));
+        sqlSampleInsert.bindString(9, emitter.getNote());
 
         sqlSampleInsert.executeInsert();
         sqlSampleInsert.clearBindings();
@@ -253,6 +331,7 @@ class Database extends SQLiteOpenHelper {
      */
     public void update(RfEmitter emitter) {
         //Log.d(TAG, "Updating " + emitter.logString() + " in db");
+
         // the data fields
         sqlSampleUpdate.bindString(1, String.valueOf(emitter.getTrust()));
         sqlSampleUpdate.bindString(2, String.valueOf(emitter.getLat()));
@@ -262,8 +341,7 @@ class Database extends SQLiteOpenHelper {
         sqlSampleUpdate.bindString(6, emitter.getNote());
 
         // the Where fields
-        sqlSampleUpdate.bindString(7, emitter.getId());
-        sqlSampleUpdate.bindString(8, String.valueOf(emitter.getType()));
+        sqlSampleUpdate.bindString(7, emitter.hashString());
         sqlSampleUpdate.executeInsert();
         sqlSampleUpdate.clearBindings();
         updatesMade = true;
@@ -312,6 +390,7 @@ class Database extends SQLiteOpenHelper {
      */
     public RfEmitter getEmitter(RfIdentification ident) {
         RfEmitter rslt = null;
+
         String query = "SELECT " +
                 COL_TYPE + ", " +
                 COL_TRUST + ", " +
@@ -321,8 +400,7 @@ class Database extends SQLiteOpenHelper {
                 COL_RAD_EW+ ", " +
                 COL_NOTE + " " +
                 " FROM " + TABLE_SAMPLES +
-                " WHERE " + COL_TYPE + "='" + ident.getRfType() +
-                "' AND " + COL_RFID + "='" + ident.getRfId() + "';";
+                " WHERE " + COL_HASH + "='" + ident.hashString() + "';";
 
         // Log.d(TAG, "getEmitter(): query='"+query+"'");
         Cursor cursor = getReadableDatabase().rawQuery(query, null);

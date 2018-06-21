@@ -72,6 +72,10 @@ public class RfIdentification implements Comparable<RfIdentification>{
         return toString().hashCode();
     }
 
+    public String hashString() {
+        return Integer.toHexString(hashCode());
+    }
+
     public String toString() {
         return "rfId=" + rfId + ", rfType=" + rfType;
     }

@@ -68,7 +68,7 @@ public class RfEmitter {
     public static final String LOC_ASU = "asu";
     public static final String LOC_MIN_COUNT = "minCount";
 
-    public enum EmitterType {WLAN, MOBILE, WLAN_5GHZ, BLUETOOTH, INVALID}
+    public enum EmitterType {WLAN_24GHZ, WLAN_5GHZ, MOBILE, INVALID}
 
     public enum EmitterStatus {
         STATUS_UNKNOWN,             // Newly discovered emitter, no data for it at all
@@ -137,7 +137,7 @@ public class RfEmitter {
     /**
      * Shared/uniform initialization, called from the various constructors we allow.
      *
-     * @param mType The type of the RF emitter (WLAN, MOBILE, etc.)
+     * @param mType The type of the RF emitter (WLAN_24GHZ, MOBILE, etc.)
      * @param ident The identification of the emitter. Must be unique within type
      */
     private void initSelf(EmitterType mType, String ident) {
@@ -181,6 +181,10 @@ public class RfEmitter {
         return getRfIdent().hashCode();
     }
 
+    public String hashString() {
+        return getRfIdent().hashString();
+    }
+
     public EmitterType getType() {
         return type;
     }
@@ -192,8 +196,8 @@ public class RfEmitter {
     public static EmitterType typeOf( String typeStr ) {
         if (typeStr.equals(EmitterType.MOBILE.toString()))
             return EmitterType.MOBILE;
-        if (typeStr.equals(EmitterType.WLAN.toString()))
-            return EmitterType.WLAN;
+        if (typeStr.equals(EmitterType.WLAN_24GHZ.toString()))
+            return EmitterType.WLAN_24GHZ;
         if (typeStr.equals(EmitterType.WLAN_5GHZ.toString()))
             return EmitterType.WLAN_5GHZ;
         return EmitterType.INVALID;
@@ -354,12 +358,12 @@ public class RfEmitter {
      * Given an emitter type, return the various characteristics we need to know
      * to model it.
      *
-     * @param t An emitter type (WLAN, MOBILE, etc.)
+     * @param t An emitter type (WLAN_24GHZ, MOBILE, etc.)
      * @return The characteristics needed to model the emitter
      */
     public static RfCharacteristics getRfCharacteristics(EmitterType t) {
         switch (t) {
-            case WLAN:
+            case WLAN_24GHZ:
                 // For 2.4 GHz, indoor range seems to be described as about 46 meters
                 // with outdoor range about 90 meters. Set the minimum range to be about
                 // 3/4 of the indoor range and the typical range somewhere between
@@ -580,7 +584,7 @@ public class RfEmitter {
      */
     private boolean blacklistEmitter() {
         switch (this.type) {
-            case WLAN:
+            case WLAN_24GHZ:
             case WLAN_5GHZ:
                 return blacklistWifi();
 

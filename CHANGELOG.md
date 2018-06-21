@@ -6,11 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- Initial support for 5 GHz WLAN RF characteristics being different than 2.4 GHz WLAN.
+- Initial support for 5 GHz WLAN RF characteristics being different than 2.4 GHz WLAN. Note: 5GHz WLAN not tested on a real device.
 
 ### Changed
 - Fix timing related crash on start up/shut down
 - Revisions to better support external GPS with faster report rates.
+- Revise database to allow same identifier on multiple emitter types.
 - Updated build tools and target API version
 
 ### Removed

@@ -635,7 +635,7 @@ public class BackendService extends LocationBackendService {
             Set<Observation> observations = new HashSet<>();
             for (ScanResult sr : scanResults) {
                 String bssid = sr.BSSID.toLowerCase(Locale.US).replace(".", ":");
-                RfEmitter.EmitterType rftype = RfEmitter.EmitterType.WLAN;
+                RfEmitter.EmitterType rftype = RfEmitter.EmitterType.WLAN_24GHZ;
                 if (is5GHz(sr.frequency))
                     rftype = RfEmitter.EmitterType.WLAN_5GHZ;
                 if (bssid != null) {
