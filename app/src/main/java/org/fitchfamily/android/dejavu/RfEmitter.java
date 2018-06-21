@@ -181,8 +181,8 @@ public class RfEmitter {
         return getRfIdent().hashCode();
     }
 
-    public String hashString() {
-        return getRfIdent().hashString();
+    public String getUniqueId() {
+        return getRfIdent().getUniqueId();
     }
 
     public EmitterType getType() {

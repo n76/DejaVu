@@ -186,8 +186,10 @@ class Database extends SQLiteOpenHelper {
                 do {
                     String rfId = cursor.getString(0);
                     String rftype = cursor.getString(1);
+                    if (rftype.equals("WLAN"))
+                        rftype = RfEmitter.EmitterType.WLAN_24GHZ.toString();
                     RfIdentification rfid = new RfIdentification(rfId, RfEmitter.typeOf(rftype));
-                    String hash = rfid.hashString();
+                    String hash = rfid.getUniqueId();
 
                     // Log.d(TAG,"upGradeToVersion2(): Updating '"+rfId.toString()+"'");
 
@@ -296,7 +298,7 @@ class Database extends SQLiteOpenHelper {
     public void drop(RfEmitter emitter) {
         //Log.d(TAG, "Dropping " + emitter.logString() + " from db");
 
-        sqlAPdrop.bindString(1, emitter.hashString());
+        sqlAPdrop.bindString(1, emitter.getUniqueId());
         sqlAPdrop.executeInsert();
         sqlAPdrop.clearBindings();
         updatesMade = true;
@@ -309,7 +311,7 @@ class Database extends SQLiteOpenHelper {
      */
     public void insert(RfEmitter emitter) {
         Log.d(TAG, "Inserting " + emitter.logString() + " into db");
-        sqlSampleInsert.bindString(1, emitter.hashString());
+        sqlSampleInsert.bindString(1, emitter.getUniqueId());
         sqlSampleInsert.bindString(2, emitter.getId());
         sqlSampleInsert.bindString(3, String.valueOf(emitter.getType()));
         sqlSampleInsert.bindString(4, String.valueOf(emitter.getTrust()));
@@ -341,7 +343,7 @@ class Database extends SQLiteOpenHelper {
         sqlSampleUpdate.bindString(6, emitter.getNote());
 
         // the Where fields
-        sqlSampleUpdate.bindString(7, emitter.hashString());
+        sqlSampleUpdate.bindString(7, emitter.getUniqueId());
         sqlSampleUpdate.executeInsert();
         sqlSampleUpdate.clearBindings();
         updatesMade = true;
@@ -400,7 +402,7 @@ class Database extends SQLiteOpenHelper {
                 COL_RAD_EW+ ", " +
                 COL_NOTE + " " +
                 " FROM " + TABLE_SAMPLES +
-                " WHERE " + COL_HASH + "='" + ident.hashString() + "';";
+                " WHERE " + COL_HASH + "='" + ident.getUniqueId() + "';";
 
         // Log.d(TAG, "getEmitter(): query='"+query+"'");
         Cursor cursor = getReadableDatabase().rawQuery(query, null);
