@@ -1,4 +1,4 @@
-Déjá Vu is a backend for the µg Project's network location provider that uses locally acquired WLAN/Wi-Fi AP and mobile/cellular tower data to resolve user location.
+Déjà Vu is a backend for the µg Project's network location provider that uses locally acquired WLAN/Wi-Fi AP and mobile/cellular tower data to resolve user location.
 
 Conceptually, this backend consists of two parts sharing a common database. One part passively monitors the GPS. If the GPS has acquired and has a good position accuracy, then the coverage maps for RF emitters detected by the phone are created and saved.
 

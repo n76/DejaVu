@@ -1,4 +1,4 @@
-Déjá Vu - A Local RF Based Backend
+Déjà Vu - A Local RF Based Backend
 ==================================
 This is a backend for [UnifiedNlp](https://github.com/microg/android_packages_apps_UnifiedNlp) that uses locally acquired WLAN/WiFi AP and mobile/cellular tower data to resolve user location. Collectively, “WLAN/WiFi and mobile/cellular” signals will be called “RF emitters” below.
 
@@ -31,7 +31,7 @@ This is a plug-in for [µg UnifiedNlp](http://forum.xda-developers.com/android/a
 
 Setup on phone
 ==============
-In the NLP Controller app (interface for µg UnifiedNlp) select the "Déjá Vu Location Service". If using GmsCore, then the little gear at microG Settings->UnifiedNlp Settings->Configure location backends->Déjá Vu Location Service is used.
+In the NLP Controller app (interface for µg UnifiedNlp) select the "Déjà Vu Location Service". If using GmsCore, then the little gear at microG Settings->UnifiedNlp Settings->Configure location backends->Déjà Vu Location Service is used.
 
 When enabled, microG will request you grant location permissions to this backend. This is required so that the backend can monitor mobile/cell tower data and so that it can monitor the positions reported by the GPS.
 
@@ -49,7 +49,7 @@ For WLAN/WiFi APs the SSID is also saved for debug purposes. Analysis of the SSI
 
 Clearing the database
 ---------------------
-This software does not have a clear or reset database function built it but you can use settings->Storage>Internal shared storage->Apps->Déjá Vu Location Service->Clear Data to remove the current database.
+This software does not have a clear or reset database function built it but you can use settings->Storage>Internal shared storage->Apps->Déjà Vu Location Service->Clear Data to remove the current database.
 
 Moved RF Emitter Handling
 =========================
