@@ -46,10 +46,14 @@ public class GpsMonitor extends Service implements LocationListener {
     private static final String TAG = "DejaVu GpsMonitor";
 
     private static final int GPS_SAMPLE_TIME = 0;
-    private static final float GSP_SAMPLE_DISTANCE = 0;
+    private static final float GPS_SAMPLE_DISTANCE = 0;
+
+    private static final float NULL_ISLAND_DISTANCE = 1000;
 
     private LocationManager lm;
     private boolean monitoring = false;
+
+    private Location nullIsland = new Location(BackendService.LOCATION_PROVIDER);;
 
     @Nullable
     @Override
@@ -63,12 +67,14 @@ public class GpsMonitor extends Service implements LocationListener {
     @Override
     public void onCreate() {
         Log.d(TAG, "onCreate()");
+        nullIsland.setLatitude(0.0);
+        nullIsland.setLongitude(0.0);
         lm = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
         if (lm != null) {
             try {
                 lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
                         GPS_SAMPLE_TIME,
-                        GSP_SAMPLE_DISTANCE,
+                        GPS_SAMPLE_DISTANCE,
                         this);
                 monitoring = true;
             } catch (SecurityException ex) {
@@ -101,12 +107,19 @@ public class GpsMonitor extends Service implements LocationListener {
      * than the GPS. The GPS reports we pass on to our main backend service for
      * it to use in mapping RF emitter coverage.
      *
+     * At least one Bluetooth GPS unit seems to return locations near 0.0,0.0
+     * until it has a good lock. This can result in our believing the local
+     * emitters are located on "null island" which then leads to other problems.
+     * So protect ourselves and ignore any GPS readings close to 0.0,0.0 as there
+     * is no land in that area and thus no possibility of mobile or WLAN emitters.
+     *
      * @param location A position report from a location provider
      */
     @Override
     public void onLocationChanged(Location location) {
         // Log.d(TAG, "onLocationChanged()");
-        if (location.getProvider().equals("gps")) {
+        if (location.getProvider().equals("gps") &&
+                (location.distanceTo(nullIsland) > NULL_ISLAND_DISTANCE)) {
             BackendService.instanceGpsLocationUpdated(location);
         }
     }
