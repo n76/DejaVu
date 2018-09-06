@@ -6,14 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- Chinese translation (thanks to @Crystal-RainSlide)
-- Protect against external GPS giving locations near 0.0/0.0
+- Not applicable
 
 ### Changed
 - Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.1.9] - 2018-09-06
+### Added
+- Chinese translation (thanks to @Crystal-RainSlide)
+- Protect against external GPS giving locations near 0.0/0.0
 
 ## [1.1.8] - 2018-06-21
 ### Added
