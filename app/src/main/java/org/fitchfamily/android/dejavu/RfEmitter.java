@@ -541,6 +541,10 @@ public class RfEmitter {
         if (location == null)
             return null;
 
+        // If we are unbelievably close to null island, don't report location
+        if (!BackendService.notNullIsland(location))
+            return null;
+
         // Time tags based on time of most recent observation
         location.setTime(mLastObservation.getLastUpdateTimeMs());
         location.setElapsedRealtimeNanos(mLastObservation.getElapsedRealtimeNanos());

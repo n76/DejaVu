@@ -48,12 +48,8 @@ public class GpsMonitor extends Service implements LocationListener {
     private static final int GPS_SAMPLE_TIME = 0;
     private static final float GPS_SAMPLE_DISTANCE = 0;
 
-    private static final float NULL_ISLAND_DISTANCE = 1000;
-
     private LocationManager lm;
     private boolean monitoring = false;
-
-    private Location nullIsland = new Location(BackendService.LOCATION_PROVIDER);;
 
     @Nullable
     @Override
@@ -67,8 +63,6 @@ public class GpsMonitor extends Service implements LocationListener {
     @Override
     public void onCreate() {
         Log.d(TAG, "onCreate()");
-        nullIsland.setLatitude(0.0);
-        nullIsland.setLongitude(0.0);
         lm = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
         if (lm != null) {
             try {
@@ -118,8 +112,7 @@ public class GpsMonitor extends Service implements LocationListener {
     @Override
     public void onLocationChanged(Location location) {
         // Log.d(TAG, "onLocationChanged()");
-        if (location.getProvider().equals("gps") &&
-                (location.distanceTo(nullIsland) > NULL_ISLAND_DISTANCE)) {
+        if (location.getProvider().equals("gps")) {
             BackendService.instanceGpsLocationUpdated(location);
         }
     }

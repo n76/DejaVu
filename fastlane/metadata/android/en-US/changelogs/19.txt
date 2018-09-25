@@ -1,1 +1,2 @@
 - Update Gradle build environment
+- Revise checks for locations near lat/lon of 0,0

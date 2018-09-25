@@ -91,6 +91,9 @@ public class BackendService extends LocationBackendService {
     // KPH -> Meters/millisec (KPH * 1000) / (60*60*1000) -> KPH/3600
     public static final float EXPECTED_SPEED = 120.0f / 3600;           // 120KPH (74 MPH)
 
+    private static final float NULL_ISLAND_DISTANCE = 1000;
+    private static Location nullIsland = new Location(BackendService.LOCATION_PROVIDER);;
+
     /**
      * Process noise for lat and lon.
      *
@@ -181,6 +184,8 @@ public class BackendService extends LocationBackendService {
     public void onCreate() {
         //Log.d(TAG, "onCreate() entry.");
         super.onCreate();
+        nullIsland.setLatitude(0.0);
+        nullIsland.setLongitude(0.0);
     }
 
     /**
@@ -300,6 +305,16 @@ public class BackendService extends LocationBackendService {
         }
     }
 
+    /**
+     * Check if location too close to null island to be real
+     *
+     * @param loc The location to be checked
+     * @return boolean True if away from lat,lon of 0,0
+     */
+    public static boolean notNullIsland(Location loc) {
+        return (nullIsland.distanceTo(loc) > NULL_ISLAND_DISTANCE);
+    }
+
     //
     // Private methods
     //
@@ -314,13 +329,15 @@ public class BackendService extends LocationBackendService {
     private void onGpsChanged(Location updt) {
         synchronized (this) {
             if (permissionsOkay) {
-                //Log.d(TAG, "onGpsChanged() entry.");
-                if (gpsLocation == null)
-                    gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
-                else
-                    gpsLocation.update(updt);
+                if (notNullIsland(updt)) {
+                    //Log.d(TAG, "onGpsChanged() entry.");
+                    if (gpsLocation == null)
+                        gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
+                    else
+                        gpsLocation.update(updt);
 
-                scanAllSensors();
+                    scanAllSensors();
+                }
             } else {
                 Log.d(TAG, "onGpsChanged() - Permissions not granted, soft fail.");
             }
@@ -673,7 +690,7 @@ public class BackendService extends LocationBackendService {
     private synchronized void queueForProcessing(Collection<Observation> observations,
                                                  long timeMs) {
         Location loc = null;
-        if (gpsLocation != null)
+        if ((gpsLocation != null) && notNullIsland(gpsLocation.getLocation()))
             loc = gpsLocation.getLocation();
         WorkItem work = new WorkItem(observations, loc, timeMs);
         workQueue.offer(work);
@@ -932,7 +949,7 @@ public class BackendService extends LocationBackendService {
 
         Collection<Location> locations = culledEmitters(getRfLocations(seenSet));
         Location weightedAverageLocation = computePostion(locations);
-        if (weightedAverageLocation != null) {
+        if ((weightedAverageLocation != null) && notNullIsland(weightedAverageLocation)) {
             //Log.d(TAG, "endOfPeriodProcessing(): " + weightedAverageLocation.toString());
             report(weightedAverageLocation);
         }
