@@ -676,6 +676,8 @@ public class RfEmitter {
                 lc.contains("muenchenlinie") ||             // WLAN network on board of bus
                 lc.contains("postbus") ||                   // WLAN network on board of bus line
                 lc.contains("telekom_ice") ||               // WLAN network on DB trains
+                lc.contains("skanetrafiken") ||             // WLAN network on Skånetrafiken (Sweden) buses and trains
+                lc.contains("oresundstag") ||               // WLAN network on Øresundståg (Sweden/Denmark) trains
                 lc.contentEquals("amtrak") ||               // WLAN network on USA Amtrak trains
                 lc.contentEquals("amtrakconnect") ||        // WLAN network on USA Amtrak trains
                 lc.contentEquals("megabus") ||              // WLAN network on MegaBus US bus
