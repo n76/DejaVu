@@ -664,6 +664,8 @@ public class RfEmitter {
                 note.startsWith("MyVolvo") ||               // Volvo in car WiFi
 
                 // Transit agencies
+                lc.startsWith("oebb ") ||                   // WLAN network on Austrian Oebb trains
+                lc.startsWith("westbahn ") ||               // WLAN network on Austrian Westbahn trains
                 lc.contains("admin@ms ") ||                 // WLAN network on Hurtigruten ships
                 lc.contains("contiki-wifi") ||              // WLAN network on board of bus
                 lc.contains("db ic bus") ||                 // WLAN network on board of German bus
