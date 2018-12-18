@@ -6,8 +6,8 @@ android {
         applicationId "org.fitchfamily.android.dejavu"
         minSdkVersion 18
         targetSdkVersion 27
-        versionCode 18
-        versionName "1.1.9"
+        versionCode 19
+        versionName "1.1.10"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {

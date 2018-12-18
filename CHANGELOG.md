@@ -9,11 +9,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Update Gradle build environment
-- Revise checks for locations near lat/lon of 0,0
+- Not applicable
 
 ### Removed
 - Not applicable
+
+## [1.1.10] - 2019-12-18
+### Added
+- Ignore WLANs on trains and buses of transit agencies in southwest Sweden. Thanks to lbschenkel
+- Ignore Austrian train WLANs. Thanks to akallabeth
+
+### Changed
+- Update Gradle build environment
+- Revise checks for locations near lat/lon of 0,0
 
 ## [1.1.9] - 2018-09-06
 ### Added
