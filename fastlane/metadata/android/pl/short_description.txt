@@ -1,0 +1,1 @@
+Podusługa dla projektu µg/UnifiedNlp okreslająca lokalizację za pomocą nadajników sieci komórkowej i Wi‑Fi.
