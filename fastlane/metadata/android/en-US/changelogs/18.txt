@@ -1,0 +1,2 @@
+- Add Chinese translation (thanks to @Crystal-RainSlide)
+- Protect against external GPS giving locations near 0.0/0.0

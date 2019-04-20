@@ -24,7 +24,6 @@ package org.fitchfamily.android.dejavu;
  */
 
 import android.location.Location;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -60,7 +59,7 @@ public class RfEmitter {
     private static final long KM = METERS * 1000;
 
     private static final long MINIMUM_TRUST = 0;
-    private static final long REQUIRED_TRUST = 30;
+    private static final long REQUIRED_TRUST = 48;
     private static final long MAXIMUM_TRUST = 100;
 
     // Tag/names for additional information on location records
@@ -69,7 +68,7 @@ public class RfEmitter {
     public static final String LOC_ASU = "asu";
     public static final String LOC_MIN_COUNT = "minCount";
 
-    public enum EmitterType {WLAN, MOBILE, INVALID}
+    public enum EmitterType {WLAN_24GHZ, WLAN_5GHZ, MOBILE, INVALID}
 
     public enum EmitterStatus {
         STATUS_UNKNOWN,             // Newly discovered emitter, no data for it at all
@@ -77,17 +76,17 @@ public class RfEmitter {
         STATUS_CHANGED,             // In database but something has changed
         STATUS_CACHED,              // In database no changes pending
         STATUS_BLACKLISTED          // Has been blacklisted
-    };
+    }
 
     public static class RfCharacteristics {
-        public float reqdGpsAccuracy;       // GPS accuracy needed in meters
-        public float minimumRange;          // Minimum believable coverage radius in meters
-        public float typicalRange;          // Typical range expected
-        public float moveDetectDistance;    // Maximum believable coverage radius in meters
-        public long discoveryTrust;         // Assumed trustiness of a rust an emitter seen for the first time.
-        public long incrTrust;              // Amount to increase trust
-        public long decrTrust;              // Amount to decrease trust
-        public long minCount;               // Minimum number of emitters before we can estimate location
+        public final float reqdGpsAccuracy;       // GPS accuracy needed in meters
+        public final float minimumRange;          // Minimum believable coverage radius in meters
+        public final float typicalRange;          // Typical range expected
+        public final float moveDetectDistance;    // Maximum believable coverage radius in meters
+        public final long discoveryTrust;         // Assumed trustiness of a rust an emitter seen for the first time.
+        public final long incrTrust;              // Amount to increase trust
+        public final long decrTrust;              // Amount to decrease trust
+        public final long minCount;               // Minimum number of emitters before we can estimate location
 
         RfCharacteristics( float gps,
                            float min,
@@ -138,7 +137,7 @@ public class RfEmitter {
     /**
      * Shared/uniform initialization, called from the various constructors we allow.
      *
-     * @param mType The type of the RF emitter (WLAN, MOBILE, etc.)
+     * @param mType The type of the RF emitter (WLAN_24GHZ, MOBILE, etc.)
      * @param ident The identification of the emitter. Must be unique within type
      */
     private void initSelf(EmitterType mType, String ident) {
@@ -163,16 +162,16 @@ public class RfEmitter {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof RfEmitter)) return false;
+        if (!(o instanceof RfIdentification)) return false;
 
-        RfEmitter e = (RfEmitter) o;
+        RfIdentification e = (RfIdentification) o;
         return getRfIdent().equals(e);
     }
 
     /**
      * Hash code is used to determine unique objects. Our "uniqueness" is
      * based on which "real life" RF emitter we model, not our current
-     * coverage, etd. So our hash code should be the same as the hash
+     * coverage, etc. So our hash code should be the same as the hash
      * code of our identification.
      *
      * @return A hash code for this object.
@@ -180,6 +179,10 @@ public class RfEmitter {
     @Override
     public int hashCode() {
         return getRfIdent().hashCode();
+    }
+
+    public String getUniqueId() {
+        return getRfIdent().getUniqueId();
     }
 
     public EmitterType getType() {
@@ -193,8 +196,10 @@ public class RfEmitter {
     public static EmitterType typeOf( String typeStr ) {
         if (typeStr.equals(EmitterType.MOBILE.toString()))
             return EmitterType.MOBILE;
-        if (typeStr.equals(EmitterType.WLAN.toString()))
-            return EmitterType.WLAN;
+        if (typeStr.equals(EmitterType.WLAN_24GHZ.toString()))
+            return EmitterType.WLAN_24GHZ;
+        if (typeStr.equals(EmitterType.WLAN_5GHZ.toString()))
+            return EmitterType.WLAN_5GHZ;
         return EmitterType.INVALID;
     }
 
@@ -246,7 +251,7 @@ public class RfEmitter {
     }
 
     public void setNote(String n) {
-        if (note != n) {
+        if (!note.equals(n)) {
             note = n;
             if (blacklistEmitter())
                 changeStatus(EmitterStatus.STATUS_BLACKLISTED, "initSelf()");
@@ -353,17 +358,41 @@ public class RfEmitter {
      * Given an emitter type, return the various characteristics we need to know
      * to model it.
      *
-     * @param t An emitter type (WLAN, MOBILE, etc.)
+     * @param t An emitter type (WLAN_24GHZ, MOBILE, etc.)
      * @return The characteristics needed to model the emitter
      */
     public static RfCharacteristics getRfCharacteristics(EmitterType t) {
         switch (t) {
-            case WLAN:
+            case WLAN_24GHZ:
+                // For 2.4 GHz, indoor range seems to be described as about 46 meters
+                // with outdoor range about 90 meters. Set the minimum range to be about
+                // 3/4 of the indoor range and the typical range somewhere between
+                // the indoor and outdoor ranges.
+                // However we've seem really, really long range detection in rural areas
+                // so base the move distance on that.
                 return new RfCharacteristics(
                         20 * METERS,        // reqdGpsAccuracy
-                        50 * METERS,        // minimumRange
-                        150 * METERS,       // typicalRange
-                        1*KM,               // moveDetectDistance - Seen pretty long detection in very rural areas
+                        35 * METERS,        // minimumRange
+                        65 * METERS,       // typicalRange
+                        300 * METERS,       // moveDetectDistance - Seen pretty long detection in very rural areas
+                        0,                  // discoveryTrust
+                        REQUIRED_TRUST/3,   // incrTrust
+                        1,                  // decrTrust
+                        2                   // minCount
+                );
+
+            case WLAN_5GHZ:
+                // For 2.4 GHz, indoor range seems to be described as about 46 meters
+                // with outdoor range about 90 meters. Set the minimum range to be about
+                // 3/4 of the indoor range and the typical range somewhere between
+                // the indoor and outdoor ranges.
+                // However we've seem really, really long range detection in rural areas
+                // so base the move distance on that.
+                return new RfCharacteristics(
+                        10 * METERS,        // reqdGpsAccuracy
+                        15 * METERS,        // minimumRange
+                        25 * METERS,       // typicalRange
+                        100 * METERS,       // moveDetectDistance - Seen pretty long detection in very rural areas
                         0,                  // discoveryTrust
                         REQUIRED_TRUST/3,   // incrTrust
                         1,                  // decrTrust
@@ -375,7 +404,7 @@ public class RfEmitter {
                         100 * METERS,       // reqdGpsAccuracy
                         500 * METERS,       // minimumRange
                         2 * KM,             // typicalRange
-                        100 * KM,           // moveDetectDistance - In the desert there towers cover large areas
+                        100 * KM,           // moveDetectDistance - In the desert towers cover large areas
                         MAXIMUM_TRUST,      // discoveryTrust
                         MAXIMUM_TRUST,      // incrTrust
                         0,                  // decrTrust
@@ -512,10 +541,13 @@ public class RfEmitter {
         if (location == null)
             return null;
 
+        // If we are unbelievably close to null island, don't report location
+        if (!BackendService.notNullIsland(location))
+            return null;
+
         // Time tags based on time of most recent observation
         location.setTime(mLastObservation.getLastUpdateTimeMs());
-        if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(mLastObservation.getElapsedRealtimeNanos());
+        location.setElapsedRealtimeNanos(mLastObservation.getElapsedRealtimeNanos());
 
         Bundle extras = new Bundle();
         extras.putString(LOC_RF_TYPE, type.toString());
@@ -556,7 +588,8 @@ public class RfEmitter {
      */
     private boolean blacklistEmitter() {
         switch (this.type) {
-            case WLAN:
+            case WLAN_24GHZ:
+            case WLAN_5GHZ:
                 return blacklistWifi();
 
             case MOBILE:
@@ -631,6 +664,8 @@ public class RfEmitter {
                 note.startsWith("MyVolvo") ||               // Volvo in car WiFi
 
                 // Transit agencies
+                lc.startsWith("oebb ") ||                   // WLAN network on Austrian Oebb trains
+                lc.startsWith("westbahn ") ||               // WLAN network on Austrian Westbahn trains
                 lc.contains("admin@ms ") ||                 // WLAN network on Hurtigruten ships
                 lc.contains("contiki-wifi") ||              // WLAN network on board of bus
                 lc.contains("db ic bus") ||                 // WLAN network on board of German bus
@@ -643,6 +678,8 @@ public class RfEmitter {
                 lc.contains("muenchenlinie") ||             // WLAN network on board of bus
                 lc.contains("postbus") ||                   // WLAN network on board of bus line
                 lc.contains("telekom_ice") ||               // WLAN network on DB trains
+                lc.contains("skanetrafiken") ||             // WLAN network on Skånetrafiken (Sweden) buses and trains
+                lc.contains("oresundstag") ||               // WLAN network on Øresundståg (Sweden/Denmark) trains
                 lc.contentEquals("amtrak") ||               // WLAN network on USA Amtrak trains
                 lc.contentEquals("amtrakconnect") ||        // WLAN network on USA Amtrak trains
                 lc.contentEquals("megabus") ||              // WLAN network on MegaBus US bus

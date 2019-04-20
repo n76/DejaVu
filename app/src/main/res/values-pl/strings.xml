@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Usługa lokalizacji Déjà Vu</string>
-    <string name="summary">Usługa lokalizacji microG/UnifiedNlp używająca prywatnej bazy danych nadajników na telefoniee</string>
+    <string name="summary">Usługa lokalizacji microG/UnifiedNlp używająca prywatnej bazy danych nadajników na telefonie</string>
 </resources>

@@ -5,13 +5,12 @@ package org.fitchfamily.android.dejavu;
  */
 
 import android.location.Location;
-import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
+//import android.util.Log;
 
-public class WeightedAverage {
-    public static final String TAG="DejaVu wgtAvg";
-    public static final float MINIMUM_BELIEVABLE_ACCURACY = 15.0F;
+class WeightedAverage {
+    private static final String TAG="DejaVu wgtAvg";
+    private static final float MINIMUM_BELIEVABLE_ACCURACY = 15.0F;
 
     private int count;
     private long timeMs;
@@ -29,11 +28,11 @@ public class WeightedAverage {
             reset();
         }
 
-        public void reset() {
+        void reset() {
             wSum = wSum2 = mean = sdAccum = 0.0;
         }
 
-        public void add(double x, double sd, double weight) {
+        void add(double x, double sd, double weight) {
             wSum = wSum + weight;
             wSum2 = wSum2 + (weight * weight);
 
@@ -43,17 +42,17 @@ public class WeightedAverage {
             sdAccum += (weight*weight)*(sd*sd);
         }
 
-        public double getMean() {
+        double getMean() {
             return mean;
         }
 
-        public double getStdDev() {
+        double getStdDev() {
             return Math.sqrt((1.0/wSum2)*sdAccum);
         }
     }
 
-    simpleWeightedAverage latEst;
-    simpleWeightedAverage lonEst;
+    private final simpleWeightedAverage latEst;
+    private final simpleWeightedAverage lonEst;
 
     WeightedAverage() {
         latEst = new simpleWeightedAverage();
@@ -61,7 +60,7 @@ public class WeightedAverage {
         reset();
     }
 
-    public void reset() {
+    private void reset() {
         latEst.reset();
         lonEst.reset();
 
@@ -115,8 +114,7 @@ public class WeightedAverage {
         final Location location = new Location(BackendService.LOCATION_PROVIDER);
 
         location.setTime(timeMs);
-        if (Build.VERSION.SDK_INT >= 17)
-            location.setElapsedRealtimeNanos(mElapsedRealtimeNanos);
+        location.setElapsedRealtimeNanos(mElapsedRealtimeNanos);
 
         location.setLatitude(latEst.getMean());
         location.setLongitude(lonEst.getMean());

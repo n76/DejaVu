@@ -52,7 +52,7 @@ import java.util.Set;
  * that are returned by the cache are not thread safe. So all work on them should be
  * performed either in a single thread or with synchronization.
  */
-public class Cache {
+class Cache {
     private static final int MAX_WORKING_SET_SIZE = 200;
     private static final int MAX_AGE = 30;
 
@@ -62,7 +62,7 @@ public class Cache {
      * Map (since they all must have different identifications) of
      * all the emitters we are working with.
      */
-    private final Map<String,RfEmitter> workingSet = new HashMap<String,RfEmitter>();
+    private final Map<String,RfEmitter> workingSet = new HashMap<>();
     private Database db;
 
     Cache(Context context) {
@@ -96,10 +96,10 @@ public class Cache {
     public RfEmitter get(RfIdentification id) {
         if (id == null)
             return null;
-        if (db == null)
-            return null;
 
         synchronized (this) {
+            if (db == null)
+                return null;
             String key = id.toString();
             RfEmitter rslt = workingSet.get(key);
             if (rslt == null) {
@@ -117,7 +117,7 @@ public class Cache {
     /**
      * Remove all entries from the cache.
      */
-    public void clear() {
+    private void clear() {
         synchronized (this) {
             workingSet.clear();
             Log.d(TAG, "clear() - entry");
@@ -132,13 +132,15 @@ public class Cache {
      */
     public void sync() {
         synchronized (this) {
+            if (db == null)
+                return;
             boolean doSync = false;
 
             // Scan all of our emitters to see
             // 1. If any have dirty data to sync to the flash database
             // 2. If any have been unused long enough to remove from cache
 
-            Set<RfIdentification> agedSet = new HashSet<RfIdentification>();
+            Set<RfIdentification> agedSet = new HashSet<>();
             for (Map.Entry<String, RfEmitter> e : workingSet.entrySet()) {
                 RfEmitter rfE = e.getValue();
                 doSync |= rfE.syncNeeded();
@@ -173,6 +175,8 @@ public class Cache {
 
     public HashSet<RfIdentification> getEmitters(RfEmitter.EmitterType rfType, BoundingBox bb) {
         synchronized (this) {
+            if (db == null)
+                return null;
             return db.getEmitters(rfType, bb);
         }
     }

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Déjà Vu - Standort Dienst mit Gedächtnis</string>
+    <string name="summary">Ein microG/UnifiedNlp Standortdienst der eine private Datenbank der Mobilfunkstationen benutzt</string>
+</resources>

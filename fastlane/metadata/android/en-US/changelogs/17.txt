@@ -1,0 +1,5 @@
+- Fix timing related crash on start up/shut down
+- Revisions to better support external GPS with faster report rates.
+- Revise database to allow same identifier on multiple emitter types.
+- Initial support for 5 GHz WLAN RF characteristics being different than 2.4 GHz WLAN.
+- Updated build tools and target API version

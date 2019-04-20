@@ -1,0 +1,4 @@
+- Update Gradle build environment
+- Revise checks for locations near lat/lon of 0,0
+- Ignore WLANs on trains and buses of transit agencies in southwest Sweden. Thanks to lbschenkel
+- Ignore Austrian train WLANs. Thanks to akallabeth

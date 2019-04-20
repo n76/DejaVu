@@ -72,6 +72,7 @@ public class BackendService extends LocationBackendService {
     private static final String TAG = "DejaVu Backend";
 
     public static final String LOCATION_PROVIDER = "DejaVu";
+    private final boolean DEBUG = false;
 
     private static final
             String[] myPerms = new String[]{
@@ -89,6 +90,9 @@ public class BackendService extends LocationBackendService {
 
     // KPH -> Meters/millisec (KPH * 1000) / (60*60*1000) -> KPH/3600
     public static final float EXPECTED_SPEED = 120.0f / 3600;           // 120KPH (74 MPH)
+
+    private static final float NULL_ISLAND_DISTANCE = 1000;
+    private static Location nullIsland = new Location(BackendService.LOCATION_PROVIDER);;
 
     /**
      * Process noise for lat and lon.
@@ -109,6 +113,7 @@ public class BackendService extends LocationBackendService {
     // We use a threads for potentially slow operations.
     private Thread mobileThread;
     private Thread backgroundThread;
+    private boolean wifiScanInprogress;
 
     private TelephonyManager tm;
 
@@ -134,8 +139,8 @@ public class BackendService extends LocationBackendService {
     // periodically adjust the trust. Ones we've seen we increment, ones we expected
     // to see but didn't we decrement.
     //
-    Set<RfIdentification> seenSet;
-    Cache emitterCache;
+    private Set<RfIdentification> seenSet;
+    private Cache emitterCache;
 
     //
     // Scanning and reporting are resource intensive operations, so we throttle
@@ -145,7 +150,7 @@ public class BackendService extends LocationBackendService {
     // So these numbers are the minimum time. Actual will be at least that based
     // on when we get GPS locations and/or update requests from microG/UnifiedNlp.
     //
-    private final static long REPORTING_INTERVAL   = 3600;                          // in milliseconds
+    private final static long REPORTING_INTERVAL   = 2700;                          // in milliseconds
     private final static long MOBILE_SCAN_INTERVAL = REPORTING_INTERVAL/2 - 100;    // in milliseconds
     private final static long WLAN_SCAN_INTERVAL   = REPORTING_INTERVAL/3 - 100;    // in milliseconds
 
@@ -159,19 +164,17 @@ public class BackendService extends LocationBackendService {
     // a single server pull and process the information.
     //
     private class WorkItem {
-        public Collection<Observation> observations;
-        public RfEmitter.EmitterType rfType;
-        public Location loc;
-        public long time;
+        Collection<Observation> observations;
+        Location loc;
+        long time;
 
-        WorkItem(Collection<Observation> o, RfEmitter.EmitterType tp, Location l, long tm) {
+        WorkItem(Collection<Observation> o, Location l, long tm) {
             observations = o;
-            rfType = tp;
             loc = l;
             time = tm;
         }
     }
-    Queue<WorkItem> workQueue = new ConcurrentLinkedQueue<WorkItem>();
+    private Queue<WorkItem> workQueue = new ConcurrentLinkedQueue<>();
 
     //
     // Overrides of inherited methods
@@ -181,6 +184,8 @@ public class BackendService extends LocationBackendService {
     public void onCreate() {
         //Log.d(TAG, "onCreate() entry.");
         super.onCreate();
+        nullIsland.setLatitude(0.0);
+        nullIsland.setLongitude(0.0);
     }
 
     /**
@@ -195,6 +200,7 @@ public class BackendService extends LocationBackendService {
         nextMobileScanTime = 0;
         nextWlanScanTime = 0;
         wifiBroadcastReceiverRegistered = false;
+        wifiScanInprogress = false;
 
         if (emitterCache == null)
             emitterCache = new Cache(this);
@@ -219,7 +225,7 @@ public class BackendService extends LocationBackendService {
      * Closing down, release our dynamic resources.
      */
     @Override
-    protected void onClose() {
+    protected synchronized void onClose() {
         super.onClose();
         Log.d(TAG, "onClose()");
         if (wifiBroadcastReceiverRegistered) {
@@ -248,7 +254,7 @@ public class BackendService extends LocationBackendService {
     protected Intent getInitIntent() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // Build list of permissions we need but have not been granted
-            List<String> perms = new LinkedList<String>();
+            List<String> perms = new LinkedList<>();
             for (String s : myPerms) {
                 if (checkSelfPermission(s) != PackageManager.PERMISSION_GRANTED)
                     perms.add(s);
@@ -299,6 +305,16 @@ public class BackendService extends LocationBackendService {
         }
     }
 
+    /**
+     * Check if location too close to null island to be real
+     *
+     * @param loc The location to be checked
+     * @return boolean True if away from lat,lon of 0,0
+     */
+    public static boolean notNullIsland(Location loc) {
+        return (nullIsland.distanceTo(loc) > NULL_ISLAND_DISTANCE);
+    }
+
     //
     // Private methods
     //
@@ -313,13 +329,15 @@ public class BackendService extends LocationBackendService {
     private void onGpsChanged(Location updt) {
         synchronized (this) {
             if (permissionsOkay) {
-                //Log.d(TAG, "onGpsChanged() entry.");
-                if (gpsLocation == null)
-                    gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
-                else
-                    gpsLocation.update(updt);
+                if (notNullIsland(updt)) {
+                    //Log.d(TAG, "onGpsChanged() entry.");
+                    if (gpsLocation == null)
+                        gpsLocation = new Kalman(updt, GPS_COORDINATE_NOISE);
+                    else
+                        gpsLocation.update(updt);
 
-                scanAllSensors();
+                    scanAllSensors();
+                }
             } else {
                 Log.d(TAG, "onGpsChanged() - Permissions not granted, soft fail.");
             }
@@ -354,13 +372,16 @@ public class BackendService extends LocationBackendService {
             return;
         nextWlanScanTime = currentProcessTime + WLAN_SCAN_INTERVAL;
 
-        //Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
         if (wm == null) {
             wm = (WifiManager) this.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         }
-        if (wm.isWifiEnabled() ||
-                ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) && wm.isScanAlwaysAvailable())) {
-            wm.startScan();
+        if ((wm != null)  && !wifiScanInprogress) {
+            if (wm.isWifiEnabled() ||
+                    ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) && wm.isScanAlwaysAvailable())) {
+                //Log.d(TAG,"startWiFiScan() - Starting WiFi collection.");
+                wifiScanInprogress = true;
+                wm.startScan();
+            }
         }
     }
 
@@ -405,7 +426,7 @@ public class BackendService extends LocationBackendService {
 
         if (observations.size() > 0) {
             // Log.d(TAG,"scanMobile() " + observations.size() + " records to be queued for processing.");
-            queueForProcessing(observations, RfEmitter.EmitterType.MOBILE, System.currentTimeMillis());
+            queueForProcessing(observations, System.currentTimeMillis());
         }
     }
 
@@ -453,7 +474,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): LTE Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): LTE Cell Identity has unknown values: " + id.toString());
                     }
                 } else if (inputCellInfo instanceof CellInfoGsm) {
                     CellInfoGsm info = (CellInfoGsm) inputCellInfo;
@@ -471,7 +493,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): GSM Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): GSM Cell Identity has unknown values: " + id.toString());
                     }
                 } else if (inputCellInfo instanceof CellInfoWcdma) {
                     CellInfoWcdma info = (CellInfoWcdma) inputCellInfo;
@@ -489,7 +512,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): WCDMA Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): WCDMA Cell Identity has unknown values: " + id.toString());
                     }
                 } else if (inputCellInfo instanceof CellInfoCdma) {
                     CellInfoCdma info = (CellInfoCdma) inputCellInfo;
@@ -506,7 +530,8 @@ public class BackendService extends LocationBackendService {
                         o.setAsu(asu);
                         observations.add(o);
                     } else {
-                        // Log.d(TAG, "getMobileTowers(): CDMA Cell Identity has unknown values: " + id.toString());
+                        if (DEBUG)
+                            Log.d(TAG, "getMobileTowers(): CDMA Cell Identity has unknown values: " + id.toString());
                     }
                 } else {
                     Log.d(TAG, "getMobileTowers(): Unsupported Cell type:  "+ inputCellInfo.toString());
@@ -535,8 +560,8 @@ public class BackendService extends LocationBackendService {
             // Log.d(TAG, "deprecatedGetMobileTowers(): mncString is NULL or not recognized.");
             return observations;
         }
-        int mcc = 0;
-        int mnc = 0;
+        int mcc;
+        int mnc;
         try {
             mcc = Integer.parseInt(mncString.substring(0, 3));
             mnc = Integer.parseInt(mncString.substring(3));
@@ -558,7 +583,8 @@ public class BackendService extends LocationBackendService {
             observations.add(o);
 
         } else {
-            // Log.d(TAG, "deprecatedGetMobileTowers(): getCellLocation() returned null or not GsmCellLocation.");
+            if (DEBUG)
+                Log.d(TAG, "deprecatedGetMobileTowers(): getCellLocation() returned null or not GsmCellLocation.");
         }
         try {
             final List<NeighboringCellInfo> neighbors = tm.getNeighboringCellInfo();
@@ -575,10 +601,12 @@ public class BackendService extends LocationBackendService {
                     }
                 }
             } else {
-                // Log.d(TAG, "deprecatedGetMobileTowers(): getNeighboringCellInfo() returned null or empty set.");
+                if (DEBUG)
+                    Log.d(TAG, "deprecatedGetMobileTowers(): getNeighboringCellInfo() returned null or empty set.");
             }
         } catch (NoSuchMethodError e) {
-            // Log.d(TAG, "deprecatedGetMobileTowers(): no such method: getNeighboringCellInfo().");
+            if (DEBUG)
+                Log.d(TAG, "deprecatedGetMobileTowers(): no such method: getNeighboringCellInfo().");
         }
         return observations;
     }
@@ -618,14 +646,17 @@ public class BackendService extends LocationBackendService {
      * Call back method entered when Android has completed a scan for WiFi emitters in
      * the area.
      */
-    private void onWiFisChanged() {
+    private synchronized void onWiFisChanged() {
         if ((wm != null) && (emitterCache != null)) {
             List<ScanResult> scanResults = wm.getScanResults();
-            Set<Observation> observations = new HashSet<Observation>();
+            Set<Observation> observations = new HashSet<>();
             for (ScanResult sr : scanResults) {
                 String bssid = sr.BSSID.toLowerCase(Locale.US).replace(".", ":");
+                RfEmitter.EmitterType rftype = RfEmitter.EmitterType.WLAN_24GHZ;
+                if (is5GHz(sr.frequency))
+                    rftype = RfEmitter.EmitterType.WLAN_5GHZ;
                 if (bssid != null) {
-                    Observation o = new Observation(bssid, RfEmitter.EmitterType.WLAN);
+                    Observation o = new Observation(bssid, rftype);
 
                     o.setAsu(WifiManager.calculateSignalLevel(sr.level, MAXIMUM_ASU));
                     o.setNote(sr.SSID);
@@ -634,9 +665,19 @@ public class BackendService extends LocationBackendService {
             }
             if (!observations.isEmpty()) {
                 // Log.d(TAG, "onWiFisChanged(): Observations: " + observations.toString());
-                queueForProcessing(observations, RfEmitter.EmitterType.WLAN, System.currentTimeMillis());
+                queueForProcessing(observations, System.currentTimeMillis());
             }
         }
+        wifiScanInprogress = false;
+    }
+
+    /**
+     * This seems like it ought to be in ScanResult but I get an unidentified error
+     * @param freq Center frequency of a WLAN
+     * @return True if in the 5GHZ range
+     */
+    static boolean is5GHz(int freq) {
+        return freq > 4900 && freq < 5900;
     }
 
     /**
@@ -644,15 +685,14 @@ public class BackendService extends LocationBackendService {
      * no thread currently exists, start one.
      *
      * @param observations A set of RF emitter observations (all must be of the same type)
-     * @param rft The type of emitter for the observations.
+     * @param timeMs The time the observations were made.
      */
     private synchronized void queueForProcessing(Collection<Observation> observations,
-                                                 RfEmitter.EmitterType rft,
                                                  long timeMs) {
         Location loc = null;
-        if (gpsLocation != null)
+        if ((gpsLocation != null) && notNullIsland(gpsLocation.getLocation()))
             loc = gpsLocation.getLocation();
-        WorkItem work = new WorkItem(observations, rft, loc, timeMs);
+        WorkItem work = new WorkItem(observations, loc, timeMs);
         workQueue.offer(work);
 
         if (backgroundThread != null) {
@@ -694,7 +734,7 @@ public class BackendService extends LocationBackendService {
             return;
 
         if (seenSet == null)
-            seenSet = new HashSet<RfIdentification>();
+            seenSet = new HashSet<>();
 
         Collection<RfEmitter> emitters = new HashSet<>();
 
@@ -719,12 +759,10 @@ public class BackendService extends LocationBackendService {
         // Check for the end of our collection period. If we are in a new period
         // then finish off the processing for the previous period.
         long currentProcessTime = System.currentTimeMillis();
-        if (currentProcessTime < nextReportTime)
-            return;
-        nextReportTime += REPORTING_INTERVAL;
-        if (nextReportTime <= currentProcessTime)
+        if (currentProcessTime >= nextReportTime) {
             nextReportTime = currentProcessTime + REPORTING_INTERVAL;
-        endOfPeriodProcessing();
+            endOfPeriodProcessing();
+        }
     }
 
     /**
@@ -813,7 +851,7 @@ public class BackendService extends LocationBackendService {
     private Set<Location> culledEmitters(Collection<Location> locations) {
         Set<Set<Location>> locationGroups = divideInGroups(locations);
 
-        List<Set<Location>> clsList = new ArrayList<Set<Location>>(locationGroups);
+        List<Set<Location>> clsList = new ArrayList<>(locationGroups);
         Collections.sort(clsList, new Comparator<Set<Location>>() {
             @Override
             public int compare(Set<Location> lhs, Set<Location> rhs) {
@@ -827,9 +865,9 @@ public class BackendService extends LocationBackendService {
             // Determine minimum count for a valid group of emitters.
             // The RfEmitter class will have put the min count into the location
             // it provided.
-            Long reqdCount = 99999l;            // Some impossibly big number
+            Long reqdCount = 99999L;            // Some impossibly big number
             for (Location l : rslt) {
-                reqdCount = Math.min(l.getExtras().getLong(RfEmitter.LOC_MIN_COUNT,9999l),reqdCount);
+                reqdCount = Math.min(l.getExtras().getLong(RfEmitter.LOC_MIN_COUNT,9999L),reqdCount);
             }
             //Log.d(TAG,"culledEmitters() reqdCount="+reqdCount+", size="+rslt.size());
             if (rslt.size() >= reqdCount)
@@ -850,11 +888,11 @@ public class BackendService extends LocationBackendService {
      */
     private Set<Set<Location>> divideInGroups(Collection<Location> locations) {
 
-        Set<Set<Location>> bins = new HashSet<Set<Location>>();
+        Set<Set<Location>> bins = new HashSet<>();
 
         // Create a bins
         for (Location location : locations) {
-            Set<Location> locGroup = new HashSet<Location>();
+            Set<Location> locGroup = new HashSet<>();
             locGroup.add(location);
             bins.add(locGroup);
         }
@@ -911,7 +949,7 @@ public class BackendService extends LocationBackendService {
 
         Collection<Location> locations = culledEmitters(getRfLocations(seenSet));
         Location weightedAverageLocation = computePostion(locations);
-        if (weightedAverageLocation != null) {
+        if ((weightedAverageLocation != null) && notNullIsland(weightedAverageLocation)) {
             //Log.d(TAG, "endOfPeriodProcessing(): " + weightedAverageLocation.toString());
             report(weightedAverageLocation);
         }
@@ -919,10 +957,14 @@ public class BackendService extends LocationBackendService {
         // Increment the trust of the emitters we've seen and decrement the trust
         // of the emitters we expected to see but didn't.
 
-        for (RfIdentification id : seenSet) {
-            RfEmitter e = emitterCache.get(id);
-            if (e != null)
-                e.incrementTrust();
+        if (seenSet != null) {
+            for (RfIdentification id : seenSet) {
+                if (id != null) {
+                    RfEmitter e = emitterCache.get(id);
+                    if (e != null)
+                        e.incrementTrust();
+                }
+            }
         }
 
         // If we are dealing with very movable emitters, then try to detect ones that
@@ -930,13 +972,17 @@ public class BackendService extends LocationBackendService {
         // that we expected to see in this area based on the GPS and our own location
         // computation.
 
-        Set<RfIdentification> expectedSet = new HashSet<RfIdentification >();
+        Set<RfIdentification> expectedSet = new HashSet<>();
         if (weightedAverageLocation != null) {
             emitterCache.sync();        // getExpected() ends bypassing the cache, so sync first
 
-            expectedSet.addAll(getExpected(weightedAverageLocation, RfEmitter.EmitterType.WLAN));
+            for (RfEmitter.EmitterType etype : RfEmitter.EmitterType.values()) {
+                expectedSet.addAll(getExpected(weightedAverageLocation, etype));
+            }
             if (gpsLocation != null) {
-                expectedSet.addAll(getExpected(gpsLocation.getLocation(), RfEmitter.EmitterType.WLAN));
+                for (RfEmitter.EmitterType etype : RfEmitter.EmitterType.values()) {
+                    expectedSet.addAll(getExpected(gpsLocation.getLocation(), etype));
+                }
             }
         }
 
@@ -952,7 +998,7 @@ public class BackendService extends LocationBackendService {
         // Sync all of our changes to the on flash database and reset the RF emitters we've seen.
 
         emitterCache.sync();
-        seenSet = new HashSet<RfIdentification>();
+        seenSet = new HashSet<>();
     }
 
     /**
@@ -969,7 +1015,7 @@ public class BackendService extends LocationBackendService {
     private Set<RfIdentification> getExpected(Location loc, RfEmitter.EmitterType rfType) {
         RfEmitter.RfCharacteristics rfChar = RfEmitter.getRfCharacteristics(rfType);
         if ((loc == null) || (loc.getAccuracy() > rfChar.typicalRange))
-            return new HashSet<RfIdentification >();;
+            return new HashSet<>();
         BoundingBox bb = new BoundingBox(loc.getLatitude(), loc.getLongitude(), rfChar.typicalRange);
         return emitterCache.getEmitters(rfType, bb);
     }

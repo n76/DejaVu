@@ -14,7 +14,62 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 - Not applicable
 
-## [1.1.1] -2018-01-30
+## [1.1.10] - 2019-12-18
+### Added
+- Ignore WLANs on trains and buses of transit agencies in southwest Sweden. Thanks to lbschenkel
+- Ignore Austrian train WLANs. Thanks to akallabeth
+
+### Changed
+- Update Gradle build environment
+- Revise checks for locations near lat/lon of 0,0
+
+## [1.1.9] - 2018-09-06
+### Added
+- Chinese translation (thanks to @Crystal-RainSlide)
+- Protect against external GPS giving locations near 0.0/0.0
+
+## [1.1.8] - 2018-06-21
+### Added
+- Initial support for 5 GHz WLAN RF characteristics being different than 2.4 GHz WLAN. Note: 5GHz WLAN not tested on a real device.
+
+### Changed
+- Fix timing related crash on start up/shut down
+- Revisions to better support external GPS with faster report rates.
+- Revise database to allow same identifier on multiple emitter types.
+- Updated build tools and target API version
+
+## [1.1.7] - 2018-06-18
+### Changed
+- Fix crash on empty set of seen emitters.
+- Fix some Lint identified items.
+
+## [1.1.6] - 2018-06-17
+### Added
+- Add Ukrainian translation
+
+### Changed
+- Build specification to reduce size of released application.
+- Update build environment
+
+## [1.1.5] - 2018-03-19
+### Added
+- Russian Translation. Thanks to @bboa
+
+## [1.1.4] - 2018-03-12
+### Added
+- German Translation. Thanks to @levush
+
+## [1.1.3] - 2018-02-27
+
+### Changed
+- Protect against accessing null object.
+
+## [1.1.2] - 2018-02-11
+
+### Changed
+- Fix typo in Polish strings. Thanks to @verdulo
+
+## [1.1.1] - 2018-01-30
 ### Changed
 - Refactor/clean up logic flow and position computation.
 

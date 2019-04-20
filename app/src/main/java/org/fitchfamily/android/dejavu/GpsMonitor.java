@@ -46,9 +46,9 @@ public class GpsMonitor extends Service implements LocationListener {
     private static final String TAG = "DejaVu GpsMonitor";
 
     private static final int GPS_SAMPLE_TIME = 0;
-    private static final float GSP_SAMPLE_DISTANCE = 0;
+    private static final float GPS_SAMPLE_DISTANCE = 0;
 
-    protected LocationManager lm;
+    private LocationManager lm;
     private boolean monitoring = false;
 
     @Nullable
@@ -64,14 +64,19 @@ public class GpsMonitor extends Service implements LocationListener {
     public void onCreate() {
         Log.d(TAG, "onCreate()");
         lm = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
-        try {
-            lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
-                    GPS_SAMPLE_TIME,
-                    GSP_SAMPLE_DISTANCE,
-                    this);
-            monitoring = true;
-        } catch (SecurityException ex) {
-            Log.w(TAG, "onCreate() failed: ", ex);
+        if (lm != null) {
+            try {
+                lm.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER,
+                        GPS_SAMPLE_TIME,
+                        GPS_SAMPLE_DISTANCE,
+                        this);
+                monitoring = true;
+            } catch (SecurityException ex) {
+                Log.w(TAG, "onCreate() failed: ", ex);
+                monitoring = false;
+            }
+        } else {
+            Log.w(TAG, "onCreate() lm is null.");
             monitoring = false;
         }
     }
@@ -96,6 +101,12 @@ public class GpsMonitor extends Service implements LocationListener {
      * than the GPS. The GPS reports we pass on to our main backend service for
      * it to use in mapping RF emitter coverage.
      *
+     * At least one Bluetooth GPS unit seems to return locations near 0.0,0.0
+     * until it has a good lock. This can result in our believing the local
+     * emitters are located on "null island" which then leads to other problems.
+     * So protect ourselves and ignore any GPS readings close to 0.0,0.0 as there
+     * is no land in that area and thus no possibility of mobile or WLAN emitters.
+     *
      * @param location A position report from a location provider
      */
     @Override
@@ -103,8 +114,6 @@ public class GpsMonitor extends Service implements LocationListener {
         // Log.d(TAG, "onLocationChanged()");
         if (location.getProvider().equals("gps")) {
             BackendService.instanceGpsLocationUpdated(location);
-        } else {
-            // Log.d(TAG, "Ignoring position from \""+location.getProvider()+"\"");
         }
     }
 

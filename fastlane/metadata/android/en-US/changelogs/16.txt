@@ -1,0 +1,2 @@
+- Fix crash on empty set of seen emitters.
+- Fix some Lint identified items.

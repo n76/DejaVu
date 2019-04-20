@@ -25,6 +25,11 @@ package org.fitchfamily.android.dejavu;
 
 import org.fitchfamily.android.dejavu.RfEmitter.EmitterType;
 
+import java.math.BigInteger;
+import java.security.*;
+import android.support.annotation.NonNull;
+import android.util.Log;
+
 /**
  * This class forms a complete identification for a RF emitter.
  *
@@ -34,28 +39,30 @@ import org.fitchfamily.android.dejavu.RfEmitter.EmitterType;
  */
 
 public class RfIdentification implements Comparable<RfIdentification>{
-    private String rfId;
-    private EmitterType rfType;
+    private static final String TAG = "DejaVu RfIdent";
+
+    private final String rfId;
+    private final EmitterType rfType;
+    private final String uniqueId;
 
     RfIdentification(String id, EmitterType t) {
         rfId = id;
         rfType = t;
+        uniqueId = genUniqueId(rfType, rfId);
     }
 
-    public int compareTo(RfIdentification o) {
-        int rslt = o.rfType.ordinal() - rfType.ordinal();
-        if (rslt == 0)
-            rslt = rfId.compareTo(o.rfId);
-        return rslt;
+    public int compareTo(@NonNull RfIdentification o) {
+        return uniqueId.compareTo(o.uniqueId);
     }
 
     public boolean equals(Object o) {
         if (this == o)
             return true;
-        if (o == null || getClass() != o.getClass())
+        if ( !(o instanceof RfIdentification))
             return false;
 
-        return (toString().compareTo(o.toString()) == 0);
+        RfIdentification that = (RfIdentification)o;
+        return (uniqueId.equals(that.uniqueId));
     }
 
     public String getRfId() {
@@ -66,12 +73,51 @@ public class RfIdentification implements Comparable<RfIdentification>{
         return rfType;
     }
 
+    public String getUniqueId() {
+        return uniqueId;
+    }
+
+    /**
+     * Return a hash code for Android to determine if we are like
+     * some other object. Since we already have a unique ID computed
+     * for our database records, use that but turn it into the int
+     * expected by Android.
+     *
+     * @return Int Android hash code
+     */
     public int hashCode() {
-        return toString().hashCode();
+        return uniqueId.hashCode();
     }
 
     public String toString() {
         return "rfId=" + rfId + ", rfType=" + rfType;
+    }
+
+    /**
+     * Generate a unique string for our RF identification. Using MD5 as it
+     * ought not have collisions but is relatively cheap to compute. Since
+     * we aren't doing cryptography here we need not worry about it being
+     * a secure hash.
+     *
+     * @param rfType The type of emitter
+     * @param rfIdent The ID string unique to the type of emitter
+     * @return String A unique identification string
+     */
+    private String genUniqueId(EmitterType rfType, String rfIdent) {
+        String hashtext = rfType + ":" + rfIdent;
+        try {
+            byte[] bytes = hashtext.getBytes("UTF-8");
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(bytes);
+            BigInteger bigInt = new BigInteger(1,digest);
+            hashtext = bigInt.toString(16);
+            while(hashtext.length() < 32 ){
+                hashtext = "0"+hashtext;
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "genUniqueId(): Exception" + e.getMessage());
+        }
+        return hashtext;
     }
 
 }
