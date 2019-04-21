@@ -1,0 +1,7 @@
+Déjà Vu jest podusługą określania lokalizacji dla projektu µg (microG), która używa lokalnie zdobytych pozycji nadajników sieci bezprzewodowych (Wi‑Fi) i komórkowych (GSM) dla określenia lokalizacji użytkownika.
+
+Ten program składa się z dwóch części ze wspólną bazą danych. Jedna część pasywnie monitoruje GPS. W przypadku określenia (odpowiednio dokładnej) pozycji GPS, zapisywane są dane wykrytych nadajników (GSM i Wi‑Fi) i tworzona jest mapa pokrycia na telefonie.
+
+Druga część jest dostawcą lokalizacji - używa ona zdobytej bazy danych do oszacowania lokalizacji w przypadku braku odczytu GPS.
+
+Ten program nie korzysta z internetu. Wszelkie zdobyte dane zostają na telefonie.

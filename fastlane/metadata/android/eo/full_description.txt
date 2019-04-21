@@ -1,0 +1,7 @@
+Déjà Vu estas subservo por determini pozicion al la projekto µg (microG), kiu uzas loke akiritajn poziciojn de sendiloj de sendrataj (vifioj) kaj poŝtelefonaj (GSM) retoj por determini pozicion de la uzanto.
+
+Tiu ĉi programo konsistas el du partoj kun la komuna datumbazo. La ununa parto pasive observadas GPS‑n. Se via aparato akiras (sufiĉe akuratan) pozicion per GPS, datumoj de trovitaj sendiloj (GSP kaj Wi‑Fi) estas konservitaj kaj surbaze tio estas kreata mapo de kovrado en via aparato.
+
+Alia parto liveras pozicion - ĝi uzas akiritan datumbazon por estimi pozicion se ne eblas akiri ĝin per GPS.
+
+Tiu ĉi aplikaĵo ne uzas la interreton. Ĉiuj akiritaj datumoj ne forlasas vian aparaton.
