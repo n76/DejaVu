@@ -1,1 +1,2 @@
 - Update gradle build environment
+- Revise list of WLAN/WiFi SSIDs to ignore
