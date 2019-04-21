@@ -694,7 +694,8 @@ public class RfEmitter {
 
                 // Other
                 lc.contains("mobile") ||                    // What I'd put into a mobile hotspot name
-                lc.contains("nsb_interakti")                // ???
+                lc.contains("nsb_interakti") ||             // ???
+                lc.contains("NVRAM WARNING")                // NVRAM WARNING Error pseudo-network
 
                 // lc.endsWith("_nomap")                    // Google unsubscibe option
         ;
