@@ -11,11 +11,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 - Update gradle build environment
 - Revise list of WLAN/WiFi SSIDs to ignore
+- Add Esperanto and Polish translations
 
 ### Removed
 - Not applicable
 
-## [1.1.10] - 2019-12-18
+## [1.1.11] - 2019-04-21
+### Added
+- Add Esperanto and Polish translations
+
+### Changed
+- Update gradle build environment
+- Revise list of WLAN/WiFi SSIDs to ignore
+
+## [1.1.10] - 2018-12-18
 ### Added
 - Ignore WLANs on trains and buses of transit agencies in southwest Sweden. Thanks to lbschenkel
 - Ignore Austrian train WLANs. Thanks to akallabeth
