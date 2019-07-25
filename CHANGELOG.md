@@ -10,8 +10,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 - Update gradle build environment
-- Revise list of WLAN/WiFi SSIDs to ignore
-- Add Esperanto and Polish translations
 
 ### Removed
 - Not applicable
