@@ -682,7 +682,12 @@ public class RfEmitter {
                 lc.contains("oresundstag") ||               // WLAN network on Øresundståg (Sweden/Denmark) trains
                 lc.contentEquals("amtrak") ||               // WLAN network on USA Amtrak trains
                 lc.contentEquals("amtrakconnect") ||        // WLAN network on USA Amtrak trains
+                lc.contentEquals("CDWiFi") ||               // WLAN network on Czech railways
                 lc.contentEquals("megabus") ||              // WLAN network on MegaBus US bus
+                lc.contentEquals("Regiojet - zluty") ||     // WLAN network on Czech airline
+                lc.contentEquals("RegioJet - zluty") ||     // WLAN network on Czech airline
+                lc.contentEquals("WESTlan") ||              // WLAN network on Austrian railways
+                lc.contentEquals("Wifi in de trein") ||     // WLAN network on Dutch railway
                 note.startsWith("BusWiFi") ||               // Some transit buses in LA Calif metro area
                 note.startsWith("CoachAmerica") ||          // Charter bus service with on board WiFi
                 note.startsWith("DisneyLandResortExpress") || // Bus with on board WiFi

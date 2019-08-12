@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Not applicable
 
 ### Changed
-- Update gradle build environment
+- Update gradle build environment.
+- Add debug logging for detection of 5G WiFi/WLAN networds.
+- Add some Czech, Austrian and Dutch transport WLANs to ignore list.
 
 ### Removed
 - Not applicable

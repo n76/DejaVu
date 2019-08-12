@@ -1,1 +1,3 @@
 - Update gradle build environment
+- Add debug logging for detection of 5G WiFi/WLAN networds
+- Add some Czech, Austrian and Dutch transport WLANs to ignore list

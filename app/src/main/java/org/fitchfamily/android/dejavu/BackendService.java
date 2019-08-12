@@ -653,8 +653,9 @@ public class BackendService extends LocationBackendService {
             for (ScanResult sr : scanResults) {
                 String bssid = sr.BSSID.toLowerCase(Locale.US).replace(".", ":");
                 RfEmitter.EmitterType rftype = RfEmitter.EmitterType.WLAN_24GHZ;
-                if (is5GHz(sr.frequency))
+                if (is5GHz(sr))
                     rftype = RfEmitter.EmitterType.WLAN_5GHZ;
+                Log.i(TAG,"rfType="+rftype.toString()+", ScanResult="+sr.toString());
                 if (bssid != null) {
                     Observation o = new Observation(bssid, rftype);
 
@@ -673,11 +674,16 @@ public class BackendService extends LocationBackendService {
 
     /**
      * This seems like it ought to be in ScanResult but I get an unidentified error
-     * @param freq Center frequency of a WLAN
+     * @param sr Result from a WLAN/WiFi scan
      * @return True if in the 5GHZ range
      */
-    static boolean is5GHz(int freq) {
-        return freq > 4900 && freq < 5900;
+    static boolean is5GHz(ScanResult sr) {
+        int freq = sr.frequency;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (sr.channelWidth != ScanResult.CHANNEL_WIDTH_20MHZ)
+                freq = sr.centerFreq0;
+        }
+        return freq > 2500;
     }
 
     /**
