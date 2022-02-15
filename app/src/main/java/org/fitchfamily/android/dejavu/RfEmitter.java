@@ -618,6 +618,7 @@ public class RfEmitter {
         boolean rslt =
                 // Mobile phone brands
                 lc.contains("android") ||                   // mobile tethering
+                lc.startsWith("HUAWEI-") ||
                 lc.contains("ipad") ||                      // mobile tethering
                 lc.contains("iphone") ||                    // mobile tethering
                 lc.contains("motorola") ||                  // mobile tethering
